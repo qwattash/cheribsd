@@ -231,6 +231,15 @@ SECTIONS
   }
   _edata = .;
   PROVIDE (edata = .);
+
+  /*. = ALIGN(8);
+  __start_set_pcpu = .;
+  set_pcpu	   :
+  {
+	*(set_pcpu)
+  }
+  __stop_set_pcpu = .;*/
+
   __bss_start = .;
   .sbss      :
   {
