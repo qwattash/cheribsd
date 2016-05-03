@@ -433,6 +433,8 @@ invoke_inflate(struct zstream_proxy *zspp)
 	}
 	if (inflate(&zs, Z_FINISH) != Z_STREAM_END) {
 		printf("inflate");
+		if (zs.msg != NULL)
+			printf(" %s", zs.msg);
 		abort();
 	}
 	if (inflateEnd(&zs) != Z_OK) {
