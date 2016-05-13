@@ -363,21 +363,66 @@ SlowFault:
 	REG_S	reg, (CALLFRAME_SIZ + (SZREG * offs)) (base)
 
 #ifdef CPU_CHERI
+
+/*
+ * Save a CHERI capability register to the stack. Explicitly use KDC ($c30)
+ * which is assumed to be correctly set.
+ */
+#define	SAVE_CREG(creg, offs, base) 					\
+	csc	creg, base, (CHERICAP_SIZE * offs)(CHERI_REG_KDC)
 /*
  * Optionally save kernel-pertinent capability registers at the top end of the
  * trap frame.  Because the 'csc' immediate is quite small, we need a
  * temporary register to hold it in, against which small constant offsets can
- * be applied.  If we save more registers, SAVE_CREG() will become desirable.
+ * be applied.
  *
  * XXXRW: Notice run-time capability-alignment hack.
+ *
+ * XXXAM: For now save the same registers as for the cheri_frame reusing
+ * the offset in the struct cheri_frame. In the future it may be worth
+ * to extend the struct trapframe to accomodate for all capability registers.
+ * $C0 is saved assuming that it have no special meaning as the default
+ * data capability.
+ * For now do not care about PCC, if merged with cheri_frame it may be
+ * desirable manage it here.
  */
 #define	SAVE_CHERI(t0reg, t1reg, base)					\
 	daddiu	t0reg, base, KERN_CREG_BASE;				\
 	dli	t1reg, -CHERICAP_SIZE;					\
 	and	t0reg, t1reg, t0reg;					\
+	SAVE_CREG(CHERI_REG_C0, CHERIFRAME_OFF_C0, t0reg);		\
+	SAVE_CREG(CHERI_REG_C1, CHERIFRAME_OFF_C1, t0reg);		\
+	SAVE_CREG(CHERI_REG_C2, CHERIFRAME_OFF_C2, t0reg);		\
+	SAVE_CREG(CHERI_REG_C3, CHERIFRAME_OFF_C3, t0reg);		\
+	SAVE_CREG(CHERI_REG_C4, CHERIFRAME_OFF_C4, t0reg);		\
+	SAVE_CREG(CHERI_REG_C5, CHERIFRAME_OFF_C5, t0reg);		\
+	SAVE_CREG(CHERI_REG_C6, CHERIFRAME_OFF_C6, t0reg);		\
+	SAVE_CREG(CHERI_REG_C7, CHERIFRAME_OFF_C7, t0reg);		\
+	SAVE_CREG(CHERI_REG_C8, CHERIFRAME_OFF_C8, t0reg);		\
+	SAVE_CREG(CHERI_REG_C9, CHERIFRAME_OFF_C9, t0reg);		\
+	SAVE_CREG(CHERI_REG_C10, CHERIFRAME_OFF_C10, t0reg);		\
+	SAVE_CREG(CHERI_REG_C11, CHERIFRAME_OFF_C11, t0reg);		\
+	SAVE_CREG(CHERI_REG_C12, CHERIFRAME_OFF_C12, t0reg);		\
+	SAVE_CREG(CHERI_REG_C13, CHERIFRAME_OFF_C13, t0reg);		\
+	SAVE_CREG(CHERI_REG_C14, CHERIFRAME_OFF_C14, t0reg);		\
+	SAVE_CREG(CHERI_REG_C15, CHERIFRAME_OFF_C15, t0reg);		\
+	SAVE_CREG(CHERI_REG_C16, CHERIFRAME_OFF_C16, t0reg);		\
+	SAVE_CREG(CHERI_REG_C17, CHERIFRAME_OFF_C17, t0reg);		\
+	SAVE_CREG(CHERI_REG_C18, CHERIFRAME_OFF_C18, t0reg);		\
+	SAVE_CREG(CHERI_REG_C19, CHERIFRAME_OFF_C19, t0reg);		\
+	SAVE_CREG(CHERI_REG_C20, CHERIFRAME_OFF_C20, t0reg);		\
+	SAVE_CREG(CHERI_REG_C21, CHERIFRAME_OFF_C21, t0reg);		\
+	SAVE_CREG(CHERI_REG_C22, CHERIFRAME_OFF_C22, t0reg);		\
+	SAVE_CREG(CHERI_REG_C23, CHERIFRAME_OFF_C23, t0reg);		\
+	SAVE_CREG(CHERI_REG_C24, CHERIFRAME_OFF_C24, t0reg);		\
+	SAVE_CREG(CHERI_REG_C25, CHERIFRAME_OFF_C25, t0reg);		\
+	SAVE_CREG(CHERI_REG_IDC, CHERIFRAME_OFF_IDC, t0reg);
+/*
 	csc	$c11, t0reg, 0(CHERI_REG_KDC);				\
 	csc	$c12, t0reg, CHERICAP_SIZE(CHERI_REG_KDC)
+*/
 #else
+#define SAVE_CREG(creg, offs, base)
 #define	SAVE_CHERI(t0reg, t1reg, base)
 #endif
 
@@ -446,6 +491,13 @@ SlowFault:
 	REG_L	reg, (CALLFRAME_SIZ + (SZREG * offs)) (base)
 
 #ifdef CPU_CHERI
+
+/*
+ * Restore a CHERI capability register to the stack, see SAVE_CREG for details.
+ */
+#define	RESTORE_CREG(creg, offs, base) 					\
+	clc	creg, base, (CHERICAP_SIZE * offs)(CHERI_REG_KDC)
+	
 /*
  * Optionally restore kernel-pertinent capability registers.  See comment above
  * about SAVE_CHERI() for details.
@@ -456,9 +508,39 @@ SlowFault:
 	daddiu	t0reg, base, KERN_CREG_BASE;				\
 	dli	t1reg, -CHERICAP_SIZE;					\
 	and	t0reg, t1reg, t0reg;					\
+	RESTORE_CREG(CHERI_REG_C0, CHERIFRAME_OFF_C0, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C1, CHERIFRAME_OFF_C1, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C2, CHERIFRAME_OFF_C2, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C3, CHERIFRAME_OFF_C3, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C4, CHERIFRAME_OFF_C4, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C5, CHERIFRAME_OFF_C5, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C6, CHERIFRAME_OFF_C6, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C7, CHERIFRAME_OFF_C7, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C8, CHERIFRAME_OFF_C8, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C9, CHERIFRAME_OFF_C9, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C10, CHERIFRAME_OFF_C10, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C11, CHERIFRAME_OFF_C11, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C12, CHERIFRAME_OFF_C12, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C13, CHERIFRAME_OFF_C13, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C14, CHERIFRAME_OFF_C14, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C15, CHERIFRAME_OFF_C15, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C16, CHERIFRAME_OFF_C16, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C17, CHERIFRAME_OFF_C17, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C18, CHERIFRAME_OFF_C18, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C19, CHERIFRAME_OFF_C19, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C20, CHERIFRAME_OFF_C20, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C21, CHERIFRAME_OFF_C21, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C22, CHERIFRAME_OFF_C22, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C23, CHERIFRAME_OFF_C23, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C24, CHERIFRAME_OFF_C24, t0reg);		\
+	RESTORE_CREG(CHERI_REG_C25, CHERIFRAME_OFF_C25, t0reg);		\
+	RESTORE_CREG(CHERI_REG_IDC, CHERIFRAME_OFF_IDC, t0reg);		\
+/*
 	clc	$c11, t0reg, 0(CHERI_REG_KDC);				\
 	clc	$c12, t0reg, CHERICAP_SIZE(CHERI_REG_KDC);
+*/
 #else
+#define RESTORE_CREG(creg, offs, base)
 #define	RESTORE_CHERI(t0reg, t1reg, base)
 #endif
 
@@ -508,9 +590,13 @@ SlowFault:
  * The kernel exception stack contains 18 saved general registers,
  * the status register and the multiply lo and high registers.
  * In addition, we set this up for linkage conventions.
+ * A CHERI kernel exception stack also contains 27 saved general capability
+ * registers.
  *
  * Place two CHERI kernel micro-ABI registers directly above the regular MIPS
  * trap frame on the stack.
+ *
+ * XXXAM: Do we need all the registers preserved?
  *
  * XXXRW: Need NUMSAVECREGS and CHERICAP_SIZE in right header.
  *
@@ -520,7 +606,7 @@ SlowFault:
  */
 #define	KERN_REG_SIZE		(NUMSAVEREGS * SZREG)
 #ifdef CPU_CHERI
-#define	KERN_CREG_SIZE		(2 * CHERICAP_SIZE + CHERICAP_SIZE/2)
+#define	KERN_CREG_SIZE		(27 * CHERICAP_SIZE + CHERICAP_SIZE/2)
 #define	KERN_CREG_BASE		(CALLFRAME_SIZ + KERN_REG_SIZE + 	\
 				    CHERICAP_SIZE/2)
 #define	KERN_EXC_FRAME_SIZE	(CALLFRAME_SIZ + KERN_REG_SIZE + \
