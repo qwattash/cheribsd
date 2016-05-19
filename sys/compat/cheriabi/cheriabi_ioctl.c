@@ -80,9 +80,16 @@ cheriabi_ioctl_md(struct thread *td, struct cheriabi_ioctl_args *uap,
 	struct md_ioctl_c md_c;
 	u_long com = 0;
 	int i, error;
+	caddr_t data;
+
+	/*
+	 * Cast capability to normal pointer, this works also with 
+	 * a non-cheri kernel
+	 */
+	data = (caddr_t)uap->data;
 
 	if (uap->com & IOC_IN) {
-		if ((error = copyincap(uap->data, &md_c, sizeof(md_c)))) {
+		if ((error = copyincap(data, &md_c, sizeof(md_c)))) {
 			return (error);
 		}
 		CP(md_c, mdv, md_version);
@@ -139,7 +146,7 @@ cheriabi_ioctl_md(struct thread *td, struct cheriabi_ioctl_args *uap,
 			for (i = 0; i < MDNPAD; i++)
 				CP(mdv, md_c, md_pad[i]);
 		}
-		error = copyoutcap(&md_c, uap->data, sizeof(md_c));
+		error = copyoutcap(&md_c, data, sizeof(md_c));
 	}
 	return error;
 }
@@ -152,8 +159,14 @@ cheriabi_ioctl_ioc_read_toc(struct thread *td,
 	struct ioc_read_toc_entry toce;
 	struct ioc_read_toc_entry_c toce_c;
 	int error;
+	caddr_t data;
 
-	if ((error = copyincap(uap->data, &toce_c, sizeof(toce_c))))
+	/*
+	 * Cast capability to normal pointer
+	 */
+	data = (caddr_t)uap->data;
+	
+	if ((error = copyincap(data, &toce_c, sizeof(toce_c))))
 		return (error);
 	CP(toce_c, toce, address_format);
 	CP(toce_c, toce, starting_track);
@@ -166,7 +179,7 @@ cheriabi_ioctl_ioc_read_toc(struct thread *td,
 		CP(toce, toce_c, starting_track);
 		CP(toce, toce_c, data_len);
 		/* Don't update data pointer */
-		error = copyoutcap(&toce_c, uap->data, sizeof(toce_c));
+		error = copyoutcap(&toce_c, data, sizeof(toce_c));
 	}
 	return error;
 }
@@ -178,8 +191,14 @@ cheriabi_ioctl_fiodgname(struct thread *td,
 	struct fiodgname_arg fgn;
 	struct fiodgname_arg_c fgn_c;
 	int error;
+	caddr_t data;
 
-	if ((error = copyincap(uap->data, &fgn_c, sizeof fgn_c)) != 0)
+	/*
+	 * Cast capability to normal pointer
+	 */
+	data = (caddr_t)uap->data;
+
+	if ((error = copyincap(data, &fgn_c, sizeof fgn_c)) != 0)
 		return (error);
 	CP(fgn_c, fgn, len);
 	PTRIN_CP(fgn_c, fgn, buf);
@@ -195,8 +214,14 @@ cheriabi_ioctl_memrange(struct thread *td,
 	struct mem_range_op_c mro_c;
 	int error;
 	u_long com;
+	caddr_t data;
 
-	if ((error = copyincap(uap->data, &mro_c, sizeof(mro_c))) != 0)
+	/*
+	 * Cast capability to normal pointer
+	 */
+	data = (caddr_t)uap->data;
+
+	if ((error = copyincap(data, &mro_c, sizeof(mro_c))) != 0)
 		return (error);
 
 	PTRIN_CP(mro_c, mro, mo_desc);
@@ -224,7 +249,7 @@ cheriabi_ioctl_memrange(struct thread *td,
 		CP(mro, mro_c, mo_arg[0]);
 		CP(mro, mro_c, mo_arg[1]);
 
-		error = copyoutcap(&mro_c, uap->data, sizeof(mro_c));
+		error = copyoutcap(&mro_c, data, sizeof(mro_c));
 	}
 
 	return (error);
@@ -237,8 +262,14 @@ cheriabi_ioctl_pciocgetconf(struct thread *td,
 	struct pci_conf_io pci;
 	struct pci_conf_io_c pci_c;
 	int error;
+	caddr_t data;
 
-	if ((error = copyincap(uap->data, &pci_c, sizeof(pci_c))) != 0)
+	/*
+	 * Cast capability to normal pointer
+	 */
+	data = (caddr_t)uap->data;
+
+	if ((error = copyincap(data, &pci_c, sizeof(pci_c))) != 0)
 		return (error);
 
 	CP(pci_c, pci, pat_buf_len);
@@ -260,7 +291,7 @@ cheriabi_ioctl_pciocgetconf(struct thread *td,
 	CP(pci, pci_c, generation);
 	CP(pci, pci_c, status);
 
-	error = copyoutcap(&pci_c, uap->data, sizeof(pci_c));
+	error = copyoutcap(&pci_c, data, sizeof(pci_c));
 
 	return (error);
 }
@@ -272,8 +303,14 @@ cheriabi_ioctl_sg(struct thread *td,
 	struct sg_io_hdr io;
 	struct sg_io_hdr_c io_c;
 	int error;
+	caddr_t data;
 
-	if ((error = copyincap(uap->data, &io_c, sizeof(io_c))) != 0)
+	/*
+	 * Cast capability to normal pointer
+	 */
+	data = (caddr_t)uap->data;
+
+	if ((error = copyincap(data, &io_c, sizeof(io_c))) != 0)
 		return (error);
 
 	CP(io_c, io, interface_id);
@@ -323,7 +360,7 @@ cheriabi_ioctl_sg(struct thread *td,
 	CP(io, io_c, duration);
 	CP(io, io_c, info);
 
-	error = copyoutcap(&io_c, uap->data, sizeof(io_c));
+	error = copyoutcap(&io_c, data, sizeof(io_c));
 
 	return (error);
 }
@@ -334,6 +371,9 @@ cheriabi_ioctl(struct thread *td, struct cheriabi_ioctl_args *uap)
 	struct file *fp;
 	cap_rights_t rights;
 	int error;
+#ifdef CHERI_KERNEL
+	struct ioctl_args sys_uap;
+#endif
 
 	error = fget(td, uap->fd, cap_rights_init(&rights, CAP_IOCTL), &fp);
 	if (error != 0)
@@ -377,8 +417,18 @@ cheriabi_ioctl(struct thread *td, struct cheriabi_ioctl_args *uap)
 		/*
 		 * Unlike on freebsd32, uap contains a 64-bit data pointer
 		 * already so we can just cast the struct pointer.
+		 * With a cheri kernel, the cast is not feasible as the uap
+		 * contains a capability
 		 */
+#ifdef CHERI_KERNEL
+		sys_uap.fd = uap->fd;
+		sys_uap.com = uap->com;
+		sys_uap.data = (caddr_t)uap->data;
+		return sys_ioctl(td, &sys_uap);
+#else
 		return sys_ioctl(td, (struct ioctl_args *)uap);
+#endif
+		
 	}
 
 	fdrop(fp, td);

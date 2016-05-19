@@ -211,14 +211,25 @@ cheriabi_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 	struct trapframe *locr0 = td->td_frame;	 /* aka td->td_pcb->pcv_regs */
 	struct cheri_frame *capreg = &td->td_pcb->pcb_cheriframe;
 	register_t intargs[8];
+#ifdef CHERI_KERNEL
+	__capability void *cptrargs[8];
+	__capability void **args;
+	uintptr_t sa_ptr_tmp;
+	register_t *sa_int_tmp;
+#else
 	uintptr_t ptrargs[8];
-	struct sysentvec *se;
 	u_int tag;
+#endif
+	struct sysentvec *se;
 	int error, i, isaved, psaved, curint, curptr, nintargs, nptrargs;
 
 	error = 0;
 
+#ifdef CHERI_KERNEL
+	bzero((void *)sa->c_args, sizeof(sa->c_args));
+#else
 	bzero(sa->args, sizeof(sa->args));
+#endif
 
 	/* compute next PC after syscall instruction */
 	td->td_pcb->pcb_tpc = sa->trapframe->pc; /* Remember if restart */
@@ -276,7 +287,35 @@ cheriabi_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 	 * not really ideal.  Instead, we'd prefer that the kernel could
 	 * differentiate between the two explicitly using tagged capabilities,
 	 * which we're not yet ready to do.
+	 *
+	 * XXXAM: Kernel should now be able to use capabilities, argument
+	 * tags should be propagated when fetching arguments. This also
+	 * solves the problem of using KDC to generate pointers.
+	 * Care should be taken when propagating capabilities directly as
+	 * most system calls will not be compatible, maybe hack in something
+	 * for a single syscall first.
+	 * It may be desirable to accomodate capability registers in the trapframe
+	 * directly.
 	 */
+
+#ifdef CHERI_KERNEL
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c3, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[0], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c4, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[1], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c5, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[2], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c6, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[3], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c7, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[4], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c8, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[5], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c9, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[6], 0);
+	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c10, 0);
+	CHERI_CSC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &cptrargs[7], 0);
+#else	
 	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, &capreg->cf_c3, 0);
 	CHERI_CGETTAG(tag, CHERI_CR_CTEMP0);
 	if (tag)
@@ -325,6 +364,7 @@ cheriabi_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 		CHERI_CTOPTR(ptrargs[7], CHERI_CR_CTEMP0, CHERI_CR_KDC);
 	else
 		CHERI_CTOINT(ptrargs[7], CHERI_CR_CTEMP0);
+#endif
 	psaved = 8;
 
 #ifdef TRAP_DEBUG
@@ -356,15 +396,40 @@ cheriabi_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 	    ("SYSCALL #%u pid:%u, nptrargs (%u) > psaved (%u).\n",
 	     sa->code, td->td_proc->p_pid, nptrargs, psaved));
 
+	curint = curptr = 0;
+#ifdef CHERI_KERNEL
+	/*
+	 * Build the argument structure taking care of the padding
+	 * between integer and capability arguments.
+	 */
+	args = sa->c_args;
+	for (i = 0; i < sa->narg; i++) {
+		if (CHERIABI_SYS_argmap[sa->code].sam_ptrmask & 1 << i) {
+			sa_ptr_tmp = (uintptr_t)args;
+			if ((sa_ptr_tmp & ~(-CHERICAP_SIZE)) != 0) {
+				sa_ptr_tmp = (uintptr_t)(args + 1) &
+					-CHERICAP_SIZE;
+				args = (__capability void **)sa_ptr_tmp;
+			}
+			*args++ = cptrargs[curptr++];
+		}
+		else {
+			sa_int_tmp = (register_t *)args;
+			*sa_int_tmp++ = intargs[curint++];
+			args = (__capability void **)sa_int_tmp;
+			
+		}
+	}
+#else
 	/*
 	 * Check each argument to see if it is a pointer and pop an argument
 	 * off the appropriate list.
 	 */
-	curint = curptr = 0;
 	for (i = 0; i < sa->narg; i++)
 		sa->args[i] =
 		    (CHERIABI_SYS_argmap[sa->code].sam_ptrmask & 1 << i) ?
 		    ptrargs[curptr++] : intargs[curint++];
+#endif
 
 	td->td_retval[0] = 0;
 	td->td_retval[1] = locr0->v1;
@@ -475,7 +540,7 @@ cheriabi_sigreturn(struct thread *td, struct cheriabi_sigreturn_args *uap)
 	ucontext_c_t uc;
 	int error;
 
-	error = copyincap(uap->sigcntxp, &uc, sizeof(uc));
+	error = copyincap((const struct ucontext_c *)uap->sigcntxp, &uc, sizeof(uc));
 	if (error != 0)
 		return (error);
 
@@ -869,11 +934,19 @@ cheriabi_sysarch(struct thread *td, struct cheriabi_sysarch_args *uap)
 	struct cheri_frame *capreg = &td->td_pcb->pcb_cheriframe;
 	int error;
 	uint64_t perms;
+#ifdef CHERI_KERNEL
+	struct sysarch_args sys_uap;
+#endif
+	/*
+	 * If parms are a capability, cast it to a normal pointer
+	 */
+	char *parms = (char *)uap->parms;
+	
 
 	switch (uap->op) {
 	case MIPS_SET_TLS:
 		cheri_capability_copy(&td->td_md.md_tls_cap, &capreg->cf_c3);
-		td->td_md.md_tls = uap->parms;
+		td->td_md.md_tls = parms;
 
 		/* XXX: should support a crdhwr version */
 		if (cpuinfo.userlocal_reg == true) {
@@ -888,14 +961,14 @@ cheriabi_sysarch(struct thread *td, struct cheriabi_sysarch_args *uap)
 			 * required see: 'git show \
 			 * c6be4f4d2d1b71c04de5d3bbb6933ce2dbcdb317'
 			 */
-			mips_wr_userlocal((unsigned long)(uap->parms +
+			mips_wr_userlocal((unsigned long)(parms +
 			    td->td_md.md_tls_tcb_offset));
 		}
 
 		return (0);
 
 	case MIPS_GET_TLS:
-		error = copyoutcap(&td->td_md.md_tls_cap, uap->parms,
+		error = copyoutcap(&td->td_md.md_tls_cap, parms,
 		    sizeof(struct chericap));
 		return (error);
 
@@ -903,23 +976,29 @@ cheriabi_sysarch(struct thread *td, struct cheriabi_sysarch_args *uap)
 		PROC_LOCK(td->td_proc);
 		perms = td->td_proc->p_md.md_cheri_mmap_perms;
 		PROC_UNLOCK(td->td_proc);
-		if (suword64(uap->parms, perms) != 0)
+		if (suword64(parms, perms) != 0)
 			return (EFAULT);
 		return (0);
 
 	case CHERI_MMAP_ANDPERM:
-		perms = fuword64(uap->parms);
+		perms = fuword64(parms);
 		if (perms == -1)
 			return (EINVAL);
 		PROC_LOCK(td->td_proc);
 		td->td_proc->p_md.md_cheri_mmap_perms &= perms;
 		perms = td->td_proc->p_md.md_cheri_mmap_perms;
 		PROC_UNLOCK(td->td_proc);
-		if (suword64(uap->parms, perms) != 0)
+		if (suword64(parms, perms) != 0)
 			return (EFAULT);
 		return (0);
 
 	default:
+#ifdef CHERI_KERNEL
+		sys_uap.op = uap->op;
+		sys_uap.parms = (char *)uap->parms;
+		return (sysarch(td, &sys_uap));
+#else
 		return (sysarch(td, (struct sysarch_args*)uap));
+#endif
 	}
 }

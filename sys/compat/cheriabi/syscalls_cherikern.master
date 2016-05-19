@@ -1,0 +1,1030 @@
+ $FreeBSD$
+;	from: @(#)syscalls.master	8.2 (Berkeley) 1/13/94
+;	from: src/sys/kern/syscalls.master 1.107
+;
+; System call name/number master file.
+; Processed to created init_sysent.c, syscalls.c and syscall.h.
+
+; Columns: number audit type name alt{name,tag,rtyp}/comments
+;	number	system call number, must be in order
+;	audit	the audit event associated with the system call
+;		A value of AUE_NULL means no auditing, but it also means that
+;		there is no audit event for the call at this time. For the
+;		case where the event exists, but we don't want auditing, the
+;		event should be #defined to AUE_NULL in audit_kevents.h.
+;	type	one of STD, OBSOL, UNIMPL, COMPAT, COMPAT4, COMPAT6,
+;		COMPAT7, NODEF, NOARGS, NOPROTO, NOSTD
+;		The COMPAT* options may be combined with one or more NO*
+;		options separated by '|' with no spaces (e.g. COMPAT|NOARGS)
+;	name	psuedo-prototype of syscall routine
+;		If one of the following alts is different, then all appear:
+;	altname	name of system call if different
+;	alttag	name of args struct tag if different from [o]`name'"_args"
+;	altrtyp	return type if not int (bogus - syscalls always return int)
+;		for UNIMPL/OBSOL, name continues with comments
+
+; types:
+;	STD	always included
+;	COMPAT	included on COMPAT #ifdef
+;	COMPAT4	included on COMPAT4 #ifdef (FreeBSD 4 compat)
+;	COMPAT6	included on COMPAT6 #ifdef (FreeBSD 6 compat)
+;	COMPAT7	included on COMPAT7 #ifdef (FreeBSD 7 compat)
+;	OBSOL	obsolete, not included in system, only specifies name
+;	UNIMPL	not implemented, placeholder only
+;	NOSTD	implemented but as a lkm that can be statically
+;		compiled in; sysent entry will be filled with lkmressys
+;		so the SYSCALL_MODULE macro works
+;	NOARGS	same as STD except do not create structure in sys/sysproto.h
+;	NODEF	same as STD except only have the entry in the syscall table
+;		added.  Meaning - do not create structure or function
+;		prototype in sys/sysproto.h
+;	NOPROTO	same as STD except do not create structure or
+;		function prototype in sys/sysproto.h.  Does add a
+;		definition to syscall.h besides adding a sysent.
+;	CHERI	generate cheri-capability stub for STD syscalls for
+;		compatibility with cheri ABI executables,
+;		pointer arguments will be treated as capabilities and
+;		casted to pointers when calling the legacy syscall
+
+; #ifdef's, etc. may be included, and are copied to the output files.
+
+#include <sys/param.h>
+#include <sys/sysent.h>
+#include <sys/sysproto.h>
+#include <sys/mount.h>
+#include <sys/socket.h>
+#include <compat/cheriabi/cheriabi.h>
+#include <compat/cheriabi/cheriabi_proto.h>
+
+#if !defined(PAD64_REQUIRED) && (defined(__powerpc__) || defined(__mips__))
+#define PAD64_REQUIRED
+#endif
+
+; Reserved/unimplemented system calls in the range 0-150 inclusive
+; are reserved for use in future Berkeley releases.
+; Additional system calls implemented in vendor and other
+; redistributions should be placed in the reserved range at the end
+; of the current calls.
+
+0	AUE_NULL	NOPROTO	{ int nosys(void); } syscall nosys_args int
+1	AUE_EXIT	CHERI	{ void sys_exit(int rval); } exit \
+				    sys_exit_args void
+2	AUE_FORK	CHERI	{ int fork(void); }
+3	AUE_READ	CHERI	{ ssize_t read(int fd, \
+				    void *buf, \
+				    size_t nbyte); }
+4	AUE_WRITE	CHERI	{ ssize_t write(int fd, const void *buf, \
+				    size_t nbyte); }
+5	AUE_OPEN_RWTC	CHERI	{ int open(char *path, int flags, \
+				    int mode); }
+6	AUE_CLOSE	CHERI	{ int close(int fd); }
+7	AUE_WAIT4	CHERI	{ int wait4(int pid, int *status, \
+				    int options, struct rusage *rusage); }
+8	AUE_CREAT	OBSOL	old creat
+9	AUE_LINK	CHERI	{ int link(char *path, char *link); }
+10	AUE_UNLINK	CHERI	{ int unlink(char *path); }
+11	AUE_NULL	OBSOL	execv
+12	AUE_CHDIR	CHERI	{ int chdir(char *path); }
+13	AUE_FCHDIR	CHERI	{ int fchdir(int fd); }
+14	AUE_MKNOD	CHERI	{ int mknod(char *path, int mode, int dev); }
+15	AUE_CHMOD	CHERI	{ int chmod(char *path, int mode); }
+16	AUE_CHOWN	CHERI	{ int chown(char *path, int uid, int gid); }
+17	AUE_NULL	OBSOL	obreak
+18	AUE_GETFSSTAT	OBSOL	getstatfs
+19	AUE_LSEEK	OBSOL	lseek
+20	AUE_GETPID	CHERI	{ pid_t getpid(void); }
+21	AUE_MOUNT	CHERI	{ int mount(char *type, char *path, \
+				    int flags, caddr_t data); }
+22	AUE_UMOUNT	CHERI	{ int unmount(char *path, int flags); }
+23	AUE_SETUID	CHERI	{ int setuid(uid_t uid); }
+24	AUE_GETUID	CHERI	{ uid_t getuid(void); }
+25	AUE_GETEUID	CHERI	{ uid_t geteuid(void); }
+26	AUE_PTRACE	CHERI	{ int ptrace(int req, pid_t pid, \
+				    caddr_t addr, int data); }
+27	AUE_RECVMSG	STD	{ int cheriabi_recvmsg(int s, __capability struct msghdr_c *msg, \
+				    int flags); }
+28	AUE_SENDMSG	STD	{ int cheriabi_sendmsg(int s, __capability struct msghdr_c *msg, \
+				    int flags); }
+29	AUE_RECVFROM	CHERI	{ int recvfrom(int s, caddr_t buf, \
+				    size_t len, int flags, \
+				    struct sockaddr * __restrict from, \
+				    __socklen_t * __restrict fromlenaddr); }
+; XXXAM why are we using caddr_t? should it be struct sockaddr * __restrict?
+; also anamelen should be __socklen_t *
+; 30	AUE_ACCEPT	CHERI	{ int accept(int s, caddr_t name, \
+; 				    int *anamelen); }
+; 31	AUE_GETPEERNAME CHERI	{ int getpeername(int fdes, caddr_t asa, \
+; 				    int *alen); }
+; 32	AUE_GETSOCKNAME	CHERI	{ int getsockname(int fdes, caddr_t asa, \
+; 				    int *alen); }
+30	AUE_ACCEPT	CHERI	{ int accept(int s, \
+				    struct sockaddr * __restrict name, \
+				    __socklen_t *anamelen); }
+31	AUE_GETPEERNAME CHERI	{ int getpeername(int fdes, \
+				    struct sockaddr * __restrict asa, \
+				    __socklen_t *alen); }
+32	AUE_GETSOCKNAME	CHERI	{ int getsockname(int fdes, \
+				    struct sockaddr * __restrict asa, \
+				    __socklen_t *alen); }
+33	AUE_ACCESS	CHERI	{ int access(char *path, int amode); }
+34	AUE_CHFLAGS	CHERI	{ int chflags(const char *path, u_long flags); }
+35	AUE_FCHFLAGS	CHERI	{ int fchflags(int fd, u_long flags); }
+36	AUE_SYNC	CHERI	{ int sync(void); }
+37	AUE_KILL	CHERI	{ int kill(int pid, int signum); }
+38	AUE_STAT	OBSOL	stat
+39	AUE_GETPPID	CHERI	{ pid_t getppid(void); }
+40	AUE_LSTAT	OBSOL	lstat
+41	AUE_DUP		CHERI	{ int dup(u_int fd); }
+42	AUE_PIPE	CHERI	{ int pipe(void); }
+43	AUE_GETEGID	CHERI	{ gid_t getegid(void); }
+44	AUE_PROFILE	CHERI	{ int profil(caddr_t samples, size_t size, \
+				    size_t offset, u_int scale); }
+45	AUE_KTRACE	CHERI	{ int ktrace(const char *fname, int ops, \
+				    int facs, int pid); }
+46	AUE_SIGACTION	OBSOL	sigaction
+47	AUE_GETGID	CHERI	{ gid_t getgid(void); }
+48	AUE_SIGPROCMASK	OBSOL	sigprocmask
+49	AUE_GETLOGIN	CHERI	{ int getlogin(char *namebuf, \
+				    u_int namelen); }
+50	AUE_SETLOGIN	CHERI	{ int setlogin(char *namebuf); }
+51	AUE_ACCT	CHERI	{ int acct(char *path); }
+52	AUE_SIGPENDING	OBSOL	sigpending
+53	AUE_SIGALTSTACK	STD	{ int cheriabi_sigaltstack( \
+				    __capability cheriabi_stack_t *ss, \
+				    __capability cheriabi_stack_t *oss); }
+; XXXAM: caddr_t can not be used with __capability
+;54	AUE_NULL	STD	{ int cheriabi_ioctl(int fd, u_long com, \
+;				    caddr_t data); }
+54	AUE_NULL	STD	{ int cheriabi_ioctl(int fd, u_long com, \
+				    __capability char *data); }
+55	AUE_REBOOT	CHERI	{ int reboot(int opt); }
+56	AUE_REVOKE	CHERI	{ int revoke(char *path); }
+57	AUE_SYMLINK	CHERI	{ int symlink(char *path, char *link); }
+58	AUE_READLINK	CHERI	{ ssize_t readlink(char *path, char *buf, \
+				    size_t count); }
+; XXXAM: struct chericap is replaced by a capability
+; 59	AUE_EXECVE	STD	{ int cheriabi_execve(char *fname, \
+; 				    struct chericap *argv, \
+; 				    struct chericap *envv); }
+59	AUE_EXECVE	STD	{ int cheriabi_execve(__capability char *fname, \
+				    __capability void *argv, \
+				    __capability void *envv); }
+60	AUE_UMASK	CHERI	{ int umask(int newmask); } umask \
+				    umask_args int
+61	AUE_CHROOT	CHERI	{ int chroot(char *path); }
+62	AUE_FSTAT	OBSOL	fstat
+63	AUE_NULL	OBSOL	ogetkerninfo
+64	AUE_NULL	OBSOL	getpagesize
+65	AUE_MSYNC	CHERI	{ int msync(void *addr, size_t len, \
+				    int flags); }
+66	AUE_VFORK	CHERI	{ int vfork(void); }
+67	AUE_NULL	OBSOL	vread
+68	AUE_NULL	OBSOL	vwrite
+69	AUE_SBRK	OBSOL	sbrk
+70	AUE_SSTK	OBSOL	sstk
+71	AUE_MMAP	OBSOL	mmap
+72	AUE_O_VADVISE	CHERI	{ int ovadvise(int anom); } vadvise \
+				    ovadvise_args int
+73	AUE_MUNMAP	CHERI	{ int munmap(void *addr, size_t len); }
+74	AUE_MPROTECT	CHERI	{ int mprotect(const void *addr, \
+				    size_t len, int prot); }
+75	AUE_MADVISE	CHERI	{ int madvise(void *addr, size_t len, \
+				    int behav); }
+76	AUE_NULL	OBSOL	vhangup
+77	AUE_NULL	OBSOL	vlimit
+78	AUE_MINCORE	CHERI	{ int mincore(const void *addr, size_t len, \
+				    char *vec); }
+79	AUE_GETGROUPS	CHERI	{ int getgroups(u_int gidsetsize, \
+				    gid_t *gidset); }
+80	AUE_SETGROUPS	CHERI	{ int setgroups(u_int gidsetsize, \
+				    gid_t *gidset); }
+81	AUE_GETPGRP	CHERI	{ int getpgrp(void); }
+82	AUE_SETPGRP	CHERI	{ int setpgid(int pid, int pgid); }
+83	AUE_SETITIMER	CHERI	{ int setitimer(u_int which, \
+				    struct itimerval *itv, \
+				    struct itimerval *oitv); }
+84	AUE_NULL	OBSOL	owait
+; XXX implement
+85	AUE_SWAPON	CHERI	{ int swapon(char *name); }
+86	AUE_GETITIMER	CHERI	{ int getitimer(u_int which, \
+				    struct itimerval *itv); }
+87	AUE_O_GETHOSTNAME	OBSOL	ogethostname
+88	AUE_O_SETHOSTNAME	OBSOL	osethostname
+89	AUE_GETDTABLESIZE	CHERI	{ int getdtablesize(void); }
+90	AUE_DUP2	CHERI	{ int dup2(u_int from, u_int to); }
+91	AUE_NULL	UNIMPL	getdopt
+92	AUE_FCNTL	CHERI	{ int fcntl(int fd, int cmd, intptr_t arg); }
+93	AUE_SELECT	CHERI	{ int select(int nd, fd_set *in, fd_set *ou, \
+				    fd_set *ex, struct timeval *tv); }
+94	AUE_NULL	UNIMPL	setdopt
+95	AUE_FSYNC	CHERI	{ int fsync(int fd); }
+96	AUE_SETPRIORITY	CHERI	{ int setpriority(int which, int who, \
+				    int prio); }
+97	AUE_SOCKET	CHERI	{ int socket(int domain, int type, \
+				    int protocol); }
+98	AUE_CONNECT	CHERI	{ int connect(int s, caddr_t name, \
+				    int namelen); }
+99	AUE_NULL	OBSOL	oaccept
+100	AUE_GETPRIORITY	CHERI	{ int getpriority(int which, int who); }
+101	AUE_NULL	OBSOL	osend
+102	AUE_NULL	OBSOL	orecv
+103	AUE_NULL	OBSOL	sigreturn
+104	AUE_BIND	CHERI	{ int bind(int s, caddr_t name, \
+				    int namelen); }
+105	AUE_SETSOCKOPT	CHERI	{ int setsockopt(int s, int level, \
+				    int name, caddr_t val, int valsize); }
+106	AUE_LISTEN	CHERI	{ int listen(int s, int backlog); }
+107	AUE_NULL	OBSOL	vtimes
+108	AUE_O_SIGVEC	OBSOL	sigvec
+109	AUE_O_SIGBLOCK	OBSOL	sigblock
+110	AUE_O_SIGSETMASK	OBSOL	sigsetmask
+111	AUE_SIGSUSPEND	OBSOL	sigsuspend
+112	AUE_O_SIGSTACK	OBSOL	sigstack
+113	AUE_NULL	OBSOL	orecvmsg
+114	AUE_NULL	OBSOL	osendmsg
+115	AUE_NULL	OBSOL	vtrace
+116	AUE_GETTIMEOFDAY	CHERI	{ int gettimeofday( \
+				    struct timeval *tp, \
+				    struct timezone *tzp); }
+117	AUE_GETRUSAGE	CHERI	{ int getrusage(int who, \
+				    struct rusage *rusage); }
+118	AUE_GETSOCKOPT	CHERI	{ int getsockopt(int s, int level, \
+				    int name, caddr_t val, int *avalsize); }
+119	AUE_NULL	UNIMPL	resuba (BSD/OS 2.x)
+120	AUE_READV	STD	{ int cheriabi_readv(int fd, \
+				    __capability struct iovec_c *iovp, u_int iovcnt); }
+121	AUE_WRITEV	STD	{ int cheriabi_writev(int fd, \
+				    __capability struct iovec_c *iovp, u_int iovcnt); }
+122	AUE_SETTIMEOFDAY	CHERI	{ int settimeofday( \
+				    struct timeval *tv, \
+				    struct timezone *tzp); }
+123	AUE_FCHOWN	CHERI	{ int fchown(int fd, int uid, int gid); }
+124	AUE_FCHMOD	CHERI	{ int fchmod(int fd, int mode); }
+125	AUE_RECVFROM	OBSOL	orecvfrom
+126	AUE_SETREUID	CHERI	{ int setreuid(int ruid, int euid); }
+127	AUE_SETREGID	CHERI	{ int setregid(int rgid, int egid); }
+128	AUE_RENAME	CHERI	{ int rename(char *from, char *to); }
+129	AUE_TRUNCATE	OBSOL	truncate
+130	AUE_FTRUNCATE	OBSOL	ftruncate
+131	AUE_FLOCK	CHERI	{ int flock(int fd, int how); }
+132	AUE_MKFIFO	CHERI	{ int mkfifo(char *path, int mode); }
+133	AUE_SENDTO	CHERI	{ int sendto(int s, caddr_t buf, \
+				    size_t len, int flags, caddr_t to, \
+				    int tolen); }
+134	AUE_SHUTDOWN	CHERI	{ int shutdown(int s, int how); }
+135	AUE_SOCKETPAIR	CHERI	{ int socketpair(int domain, int type, \
+				    int protocol, int *rsv); }
+136	AUE_MKDIR	CHERI	{ int mkdir(char *path, int mode); }
+137	AUE_RMDIR	CHERI	{ int rmdir(char *path); }
+138	AUE_UTIMES	CHERI	{ int utimes(char *path, \
+				    struct timeval *tptr); }
+139	AUE_NULL	OBSOL	sigreturn
+140	AUE_ADJTIME	CHERI	{ int adjtime( \
+				    struct timeval *delta, \
+				    struct timeval *olddelta); }
+141	AUE_GETPEERNAME	OBSOL	ogetpeername
+142	AUE_SYSCTL	OBSOL	ogethostid
+143	AUE_SYSCTL	OBSOL	sethostid
+144	AUE_GETRLIMIT	OBSOL	getrlimit
+145	AUE_SETRLIMIT	OBSOL	setrlimit
+146	AUE_KILLPG	OBSOL	killpg
+147	AUE_SETSID	CHERI	{ int setsid(void); }
+148	AUE_QUOTACTL	CHERI	{ int quotactl(char *path, int cmd, int uid, \
+				    caddr_t arg); }
+149	AUE_O_QUOTA	OBSOL oquota
+150	AUE_GETSOCKNAME	OBSOL ogetsockname
+
+; Syscalls 151-180 inclusive are reserved for vendor-specific
+; system calls.  (This includes various calls added for compatibity
+; with other Unix variants.)
+; Some of these calls are now supported by BSD...
+151	AUE_NULL	UNIMPL	sem_lock (BSD/OS 2.x)
+152	AUE_NULL	UNIMPL	sem_wakeup (BSD/OS 2.x)
+153	AUE_NULL	UNIMPL	asyncdaemon (BSD/OS 2.x)
+; 154 is initialised by the NLM code, if present.
+154	AUE_NULL	NOSTD	{ int cheriabi_nlm_syscall(int debug_level, \
+				    int grace_period , int addr_count, \
+				    __capability char **addrs); }
+; 155 is initialized by the NFS code, if present.
+155	AUE_NFS_SVC	NOSTD|NOPROTO	{ int nfssvc(int flag, caddr_t argp); }
+156	AUE_GETDIRENTRIES OBSOL getdirentries
+157	AUE_STATFS	OBSOL	statfs
+158	AUE_FSTATFS	OBSOL	fstatfs
+159	AUE_NULL	UNIMPL	nosys
+160	AUE_LGETFH	CHERI { int lgetfh(char *fname, \
+				    struct fhandle *fhp); }
+161	AUE_NFS_GETFH	CHERI	{ int getfh(char *fname, \
+				    struct fhandle *fhp); }
+162	AUE_NULL	OBSOL	getdomainname
+163	AUE_NULL	OBSOL	setdomainname
+164	AUE_NULL	OBSOL	uname
+165	AUE_SYSARCH	STD	{ int cheriabi_sysarch(int op, __capability char *parms); }
+166	AUE_RTPRIO	CHERI	{ int rtprio(int function, pid_t pid, \
+				    struct rtprio *rtp); }
+167	AUE_NULL	UNIMPL	nosys
+168	AUE_NULL	UNIMPL	nosys
+169	AUE_SEMSYS	OBSOL	semsys
+170	AUE_MSGSYS	OBSOL	msgsys
+171	AUE_SHMSYS	OBSOL	shmsys
+172	AUE_NULL	UNIMPL	nosys
+173	AUE_PREAD	OBSOL	pread
+174	AUE_PWRITE	OBSOL	pwrite
+175	AUE_NULL	CHERI	{ int setfib(int fibnum); }
+176	AUE_NTP_ADJTIME	CHERI	{ int ntp_adjtime(struct timex *tp); }
+177	AUE_NULL	UNIMPL	sfork (BSD/OS 2.x)
+178	AUE_NULL	UNIMPL	getdescriptor (BSD/OS 2.x)
+179	AUE_NULL	UNIMPL	setdescriptor (BSD/OS 2.x)
+180	AUE_NULL	UNIMPL	nosys
+
+; Syscalls 181-199 are used by/reserved for BSD
+181	AUE_SETGID	CHERI	{ int setgid(gid_t gid); }
+182	AUE_SETEGID	CHERI	{ int setegid(gid_t egid); }
+183	AUE_SETEUID	CHERI	{ int seteuid(uid_t euid); }
+184	AUE_NULL	UNIMPL	lfs_bmapv
+185	AUE_NULL	UNIMPL	lfs_markv
+186	AUE_NULL	UNIMPL	lfs_segclean
+187	AUE_NULL	UNIMPL	lfs_segwait
+188	AUE_STAT	CHERI	{ int stat(char *path, struct stat *ub); }
+189	AUE_FSTAT	CHERI	{ int fstat(int fd, struct stat *sb); }
+190	AUE_LSTAT	CHERI	{ int lstat(char *path, struct stat *ub); }
+191	AUE_PATHCONF	CHERI	{ int pathconf(char *path, int name); }
+192	AUE_FPATHCONF	CHERI	{ int fpathconf(int fd, int name); }
+193	AUE_NULL	UNIMPL	nosys
+194	AUE_GETRLIMIT	CHERI	{ int getrlimit(u_int which, \
+				    struct rlimit *rlp); } getrlimit \
+				    __getrlimit_args int
+195	AUE_SETRLIMIT	CHERI	{ int setrlimit(u_int which, \
+				    struct rlimit *rlp); } setrlimit \
+				    __setrlimit_args int
+196	AUE_GETDIRENTRIES	CHERI	{ int getdirentries(int fd, \
+				    char *buf, u_int count, long *basep); }
+197	AUE_MMAP	OBSOL	mmap
+198	AUE_NULL	NOPROTO	{ int nosys(void); } __syscall \
+				    __syscall_args int
+199	AUE_LSEEK	OBSOL	lseek
+200	AUE_TRUNCATE	OBSOL	truncate
+201	AUE_FTRUNCATE	OBSOL	ftruncate
+; XXXAM: should the oldlenp be size_t * and newlen size_t?
+;202	AUE_SYSCTL	CHERI	{ int __sysctl(int *name, u_int namelen, \
+;				    void *old, void *oldlenp, void *new, \
+;				    void newlen); } __sysctl sysctl_args int
+202	AUE_SYSCTL	CHERI	{ int __sysctl(int *name, u_int namelen, \
+				    void *old, size_t *oldlenp, void *new, \
+				    size_t newlen); } __sysctl sysctl_args int
+203	AUE_MLOCK	CHERI	{ int mlock(const void *addr, \
+				    size_t len); }
+204	AUE_MUNLOCK	CHERI	{ int munlock(const void *addr, \
+				    size_t len); }
+205	AUE_UNDELETE	CHERI	{ int undelete(char *path); }
+206	AUE_FUTIMES	CHERI	{ int futimes(int fd, \
+				    struct timeval *tptr); }
+207	AUE_GETPGID	CHERI	{ int getpgid(pid_t pid); }
+208	AUE_NULL	UNIMPL	newreboot (NetBSD)
+209	AUE_POLL	CHERI	{ int poll(struct pollfd *fds, u_int nfds, \
+				    int timeout); }
+
+;
+; The following are reserved for loadable syscalls
+;
+210	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+211	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+212	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+213	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+214	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+215	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+216	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+217	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+218	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+219	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
+
+;
+; The following were introduced with NetBSD/4.4Lite-2
+; They are initialized by their respective modules/sysinits
+; XXX PROBLEM!!
+220	AUE_SEMCTL	OBSOL	__semctl
+221	AUE_SEMGET	NOSTD|NOPROTO	{ int semget(key_t key, int nsems, \
+				    int semflg); }
+222	AUE_SEMOP	NOSTD|NOPROTO	{ int semop(int semid, \
+				    struct sembuf *sops, u_int nsops); }
+223	AUE_NULL	UNIMPL	semconfig
+224	AUE_MSGCTL	OBSOL	msgctl
+225	AUE_MSGGET	NOSTD|NOPROTO	{ int msgget(key_t key, int msgflg); }
+226	AUE_MSGSND	NOSTD|NOPROTO	{ int msgsnd(int msqid, void *msgp, \
+				    size_t msgsz, int msgflg); }
+227	AUE_MSGRCV	NOSTD|NOPROTO	{ int msgrcv(int msqid, void *msgp, \
+				    size_t msgsz, long msgtyp, int msgflg); }
+228	AUE_SHMAT	NOSTD|NOPROTO	{ int shmat(int shmid, void *shmaddr, \
+				    int shmflg); }
+229	AUE_SHMCTL	OBSOL	shmctl
+230	AUE_SHMDT	NOSTD|NOPROTO	{ int shmdt(void *shmaddr); }
+231	AUE_SHMGET	NOSTD|NOPROTO	{ int shmget(key_t key, int size, \
+				    int shmflg); }
+;
+232	AUE_NULL	CHERI	{ int clock_gettime(clockid_t clock_id, \
+				    struct timespec *tp); }
+233	AUE_CLOCK_SETTIME	CHERI	{ int clock_settime(clockid_t clock_id, \
+				    const struct timespec *tp); }
+234	AUE_NULL	CHERI	{ int clock_getres(clockid_t clock_id, \
+				    struct timespec *tp); }
+235	AUE_NULL	STD	{ int cheriabi_ktimer_create(\
+				    clockid_t clock_id, \
+				    __capability struct sigevent_c *evp, \
+				    __capability int *timerid); }
+236	AUE_NULL	CHERI	{ int ktimer_delete(int timerid); }
+237	AUE_NULL	CHERI	{ int ktimer_settime(int timerid,\
+				    int flags, \
+				    const struct itimerspec *value, \
+				    struct itimerspec *ovalue); }
+238	AUE_NULL	CHERI	{ int ktimer_gettime(int timerid,\
+				    struct itimerspec *value); }
+239	AUE_NULL	CHERI	{ int ktimer_getoverrun(int timerid); }
+240	AUE_NULL	CHERI	{ int nanosleep( \
+				    const struct timespec *rqtp, \
+				    struct timespec *rmtp); }
+241	AUE_NULL	CHERI	{ int ffclock_getcounter(ffcounter *ffcount); }
+242	AUE_NULL	CHERI	{ int ffclock_setestimate( \
+				    struct ffclock_estimate *cest); }
+243	AUE_NULL	CHERI	{ int ffclock_getestimate( \
+				    struct ffclock_estimate *cest); }
+244	AUE_NULL	UNIMPL	nosys
+245	AUE_NULL	UNIMPL	nosys
+246	AUE_NULL	UNIMPL	nosys
+247	AUE_NULL	CHERI	{ int clock_getcpuclockid2(id_t id,\
+				    int which, clockid_t *clock_id); }
+248	AUE_NULL	CHERI	{ int ntp_gettime(struct ntptimeval *ntvp); }
+249	AUE_NULL	UNIMPL	nosys
+; syscall numbers initially used in OpenBSD
+250	AUE_MINHERIT	CHERI	{ int minherit(void *addr, size_t len, \
+				    int inherit); }
+251	AUE_RFORK	CHERI	{ int rfork(int flags); }
+252	AUE_POLL	CHERI	{ int openbsd_poll(struct pollfd *fds, \
+				    u_int nfds, int timeout); }
+253	AUE_ISSETUGID	CHERI	{ int issetugid(void); }
+254	AUE_LCHOWN	CHERI	{ int lchown(char *path, int uid, int gid); }
+255	AUE_NULL	NOSTD	{ int cheriabi_aio_read( \
+				    __capability struct aiocb_c *aiocbp); }
+256	AUE_NULL	NOSTD	{ int cheriabi_aio_write( \
+				    __capability struct aiocb_c *aiocbp); }
+257	AUE_NULL	NOSTD	{ int cheriabi_lio_listio(int mode, \
+				    __capability struct aiocb_c * const *acb_list, \
+				    int nent, __capability struct sigevent_c *sig); }
+258	AUE_NULL	UNIMPL	nosys
+259	AUE_NULL	UNIMPL	nosys
+260	AUE_NULL	UNIMPL	nosys
+261	AUE_NULL	UNIMPL	nosys
+262	AUE_NULL	UNIMPL	nosys
+263	AUE_NULL	UNIMPL	nosys
+264	AUE_NULL	UNIMPL	nosys
+265	AUE_NULL	UNIMPL	nosys
+266	AUE_NULL	UNIMPL	nosys
+267	AUE_NULL	UNIMPL	nosys
+268	AUE_NULL	UNIMPL	nosys
+269	AUE_NULL	UNIMPL	nosys
+270	AUE_NULL	UNIMPL	nosys
+271	AUE_NULL	UNIMPL	nosys
+272	AUE_O_GETDENTS	CHERI	{ int getdents(int fd, char *buf, \
+				    size_t count); }
+273	AUE_NULL	UNIMPL	nosys
+274	AUE_LCHMOD	CHERI	{ int lchmod(char *path, mode_t mode); }
+275	AUE_LCHOWN	NOPROTO	{ int lchown(char *path, uid_t uid, \
+				    gid_t gid); } netbsd_lchown \
+				    lchown_args int
+276	AUE_LUTIMES	CHERI	{ int lutimes(char *path, \
+				    struct timeval *tptr); }
+277	AUE_MSYNC	NOPROTO	{ int msync(void *addr, size_t len, \
+				    int flags); } netbsd_msync msync_args int
+278	AUE_STAT	CHERI	{ int nstat(char *path, struct nstat *ub); }
+279	AUE_FSTAT	CHERI	{ int nfstat(int fd, struct nstat *sb); }
+280	AUE_LSTAT	CHERI	{ int nlstat(char *path, struct nstat *ub); }
+281	AUE_NULL	UNIMPL	nosys
+282	AUE_NULL	UNIMPL	nosys
+283	AUE_NULL	UNIMPL	nosys
+284	AUE_NULL	UNIMPL	nosys
+285	AUE_NULL	UNIMPL	nosys
+286	AUE_NULL	UNIMPL	nosys
+287	AUE_NULL	UNIMPL	nosys
+288	AUE_NULL	UNIMPL	nosys
+; 289 and 290 from NetBSD (OpenBSD: 267 and 268)
+289	AUE_PREADV	STD	{ ssize_t cheriabi_preadv(int fd, \
+					__capability struct iovec_c *iovp, \
+					u_int iovcnt, off_t offset); }
+290	AUE_PWRITEV	STD	{ ssize_t cheriabi_pwritev(int fd, \
+					__capability struct iovec_c *iovp, \
+					u_int iovcnt, off_t offset); }
+291	AUE_NULL	UNIMPL	nosys
+292	AUE_NULL	UNIMPL	nosys
+293	AUE_NULL	UNIMPL	nosys
+294	AUE_NULL	UNIMPL	nosys
+295	AUE_NULL	UNIMPL	nosys
+296	AUE_NULL	UNIMPL	nosys
+; XXX 297 is 300 in NetBSD 
+297	AUE_FHSTATFS	OBSOL	fhstatfs
+298	AUE_FHOPEN	CHERI	{ int fhopen(const struct fhandle *u_fhp, \
+			 	    int flags); }
+299	AUE_FHSTAT	CHERI	{ int fhstat(const struct fhandle *u_fhp, \
+				    struct stat *sb); }
+; syscall numbers for FreeBSD
+300	AUE_NULL	CHERI	{ int modnext(int modid); }
+301	AUE_NULL	CHERI	{ int modstat(int modid, \
+				    struct module_stat* stat); }
+302	AUE_NULL	CHERI	{ int modfnext(int modid); }
+303	AUE_NULL	CHERI	{ int modfind(const char *name); }
+304	AUE_MODLOAD	CHERI	{ int kldload(const char *file); }
+305	AUE_MODUNLOAD	CHERI	{ int kldunload(int fileid); }
+306	AUE_NULL	CHERI	{ int kldfind(const char *file); }
+307	AUE_NULL	CHERI	{ int kldnext(int fileid); }
+; XXX-BD: kld_file_stat contains a caddr_t to a kernel address
+308	AUE_NULL	CHERI	{ int kldstat(int fileid, \
+				    struct kld_file_stat* stat); }
+309	AUE_NULL	CHERI	{ int kldfirstmod(int fileid); }
+310	AUE_GETSID	CHERI	{ int getsid(pid_t pid); }
+311	AUE_SETRESUID	CHERI	{ int setresuid(uid_t ruid, uid_t euid, \
+				    uid_t suid); }
+312	AUE_SETRESGID	CHERI	{ int setresgid(gid_t rgid, gid_t egid, \
+				    gid_t sgid); }
+313	AUE_NULL	OBSOL	signanosleep
+314	AUE_NULL	NOSTD	{ int cheriabi_aio_return( \
+				    __capability struct aiocb_c *aiocbp); }
+315	AUE_NULL	NOSTD	{ int cheriabi_aio_suspend( \
+				    __capability struct aiocb_c * const * aiocbp, int nent, \
+				    __capability const struct timespec *timeout); }
+316	AUE_NULL	NOSTD	{ int cheriabi_aio_cancel(int fd, \
+				    __capability struct aiocb_c *aiocbp); }
+317	AUE_NULL	NOSTD	{ int cheriabi_aio_error( \
+				    __capability struct aiocb_c *aiocbp); }
+318	AUE_NULL	OBSOL	oaio_read
+319	AUE_NULL	OBSOL	oaio_write
+320	AUE_NULL	OBSOL	olio_listio
+321	AUE_NULL	CHERI	{ int yield(void); }
+322	AUE_NULL	OBSOL	thr_sleep
+323	AUE_NULL	OBSOL	thr_wakeup
+324	AUE_MLOCKALL	CHERI	{ int mlockall(int how); }
+325	AUE_MUNLOCKALL	CHERI	{ int munlockall(void); }
+326	AUE_GETCWD	CHERI	{ int __getcwd(char *buf, u_int buflen); }
+
+327	AUE_NULL	CHERI	{ int sched_setparam (pid_t pid, \
+				    const struct sched_param *param); }
+328	AUE_NULL	CHERI	{ int sched_getparam (pid_t pid, \
+				    struct sched_param *param); }
+
+329	AUE_NULL	CHERI	{ int sched_setscheduler (pid_t pid, \
+				    int policy, \
+				    const struct sched_param *param); }
+330	AUE_NULL	CHERI	{ int sched_getscheduler (pid_t pid); }
+
+331	AUE_NULL	CHERI	{ int sched_yield (void); }
+332	AUE_NULL	CHERI	{ int sched_get_priority_max (int policy); }
+333	AUE_NULL	CHERI	{ int sched_get_priority_min (int policy); }
+334	AUE_NULL	CHERI	{ int sched_rr_get_interval (pid_t pid, \
+				    struct timespec *interval); }
+335	AUE_NULL	CHERI	{ int utrace(const void *addr, size_t len); }
+336	AUE_SENDFILE	OBSOL	sendfile
+337	AUE_NULL	CHERI	{ int kldsym(int fileid, int cmd, \
+				    void *data); }
+338	AUE_JAIL	STD	{ int cheriabi_jail(__capability struct jail_c *jail); }
+339	AUE_NULL	UNIMPL	nnpfs_syscall
+340	AUE_SIGPROCMASK	CHERI	{ int sigprocmask(int how, \
+				    const sigset_t *set, sigset_t *oset); }
+341	AUE_SIGSUSPEND	CHERI	{ int sigsuspend(const sigset_t *sigmask); }
+342	AUE_SIGACTION	OBSOL	sigaction
+343	AUE_SIGPENDING	CHERI	{ int sigpending(sigset_t *set); }
+344	AUE_SIGRETURN	OBSOL	sigreturn
+; XXXBD: siginfo_t contains a void*, but there is no 32-bit version.
+; Do we need a cheri version?
+345	AUE_SIGWAIT	STD	{ int cheriabi_sigtimedwait( \
+				    __capability const sigset_t *set, \
+				    __capability siginfo_t *info, \
+				    __capability const struct timespec *timeout); }
+346	AUE_NULL	STD	{ int cheriabi_sigwaitinfo( \
+				    __capability const sigset_t *set, \
+				    __capability siginfo_t *info); }
+347	AUE_NULL	CHERI	{ int __acl_get_file(const char *path, \
+				    acl_type_t type, struct acl *aclp); }
+348	AUE_NULL	CHERI	{ int __acl_set_file(const char *path, \
+				    acl_type_t type, struct acl *aclp); }
+349	AUE_NULL	CHERI	{ int __acl_get_fd(int filedes, \
+				    acl_type_t type, struct acl *aclp); }
+350	AUE_NULL	CHERI	{ int __acl_set_fd(int filedes, \
+				    acl_type_t type, struct acl *aclp); }
+351	AUE_NULL	CHERI	{ int __acl_delete_file(const char *path, \
+				    acl_type_t type); }
+352	AUE_NULL	CHERI	{ int __acl_delete_fd(int filedes, \
+				    acl_type_t type); }
+353	AUE_NULL	CHERI	{ int __acl_aclcheck_file(const char *path, \
+				    acl_type_t type, struct acl *aclp); }
+354	AUE_NULL	CHERI	{ int __acl_aclcheck_fd(int filedes, \
+				    acl_type_t type, struct acl *aclp); }
+355	AUE_EXTATTRCTL	CHERI	{ int extattrctl(const char *path, int cmd, \
+				    const char *filename, int attrnamespace, \
+				    const char *attrname); }
+356	AUE_EXTATTR_SET_FILE	CHERI	{ ssize_t extattr_set_file( \
+				    const char *path, int attrnamespace, \
+				    const char *attrname, void *data, \
+				    size_t nbytes); }
+357	AUE_EXTATTR_GET_FILE	CHERI	{ ssize_t extattr_get_file( \
+				    const char *path, int attrnamespace, \
+				    const char *attrname, void *data, \
+				    size_t nbytes); }
+358	AUE_EXTATTR_DELETE_FILE	CHERI	{ int extattr_delete_file( \
+				    const char *path, int attrnamespace, \
+				    const char *attrname); }
+359	AUE_NULL	NOSTD	{ int cheriabi_aio_waitcomplete( \
+				    __capability struct aiocb_c **aiocbp, \
+				    __capability struct timespec *timeout); }
+360	AUE_GETRESUID	CHERI	{ int getresuid(uid_t *ruid, uid_t *euid, \
+				    uid_t *suid); }
+361	AUE_GETRESGID	CHERI	{ int getresgid(gid_t *rgid, gid_t *egid, \
+				    gid_t *sgid); }
+362	AUE_KQUEUE	CHERI	{ int kqueue(void); }
+363	AUE_NULL	STD	{ int cheriabi_kevent(int fd, \
+				    __capability const struct kevent_c *changelist, \
+				    int nchanges, \
+				    __capability struct kevent_c *eventlist, int nevents, \
+				    __capability const struct timespec *timeout); }
+364	AUE_NULL	UNIMPL	__cap_get_proc
+365	AUE_NULL	UNIMPL	__cap_set_proc
+366	AUE_NULL	UNIMPL	__cap_get_fd
+367	AUE_NULL	UNIMPL	__cap_get_file
+368	AUE_NULL	UNIMPL	__cap_set_fd
+369	AUE_NULL	UNIMPL	__cap_set_file
+370	AUE_NULL	UNIMPL	nosys
+371	AUE_EXTATTR_SET_FD	CHERI	{ ssize_t extattr_set_fd(int fd, \
+				    int attrnamespace, const char *attrname, \
+				    void *data, size_t nbytes); }
+372	AUE_EXTATTR_GET_FD	CHERI	{ ssize_t extattr_get_fd(int fd, \
+				    int attrnamespace, const char *attrname, \
+				    void *data, size_t nbytes); }
+373	AUE_EXTATTR_DELETE_FD	CHERI	{ int extattr_delete_fd(int fd, \
+				    int attrnamespace, \
+				    const char *attrname); }
+374	AUE_NULL	CHERI	{ int __setugid(int flag); }
+375	AUE_NULL	UNIMPL	nfsclnt
+376	AUE_EACCESS	CHERI	{ int eaccess(char *path, int amode); }
+377	AUE_NULL	UNIMPL	afs3_syscall
+378	AUE_NMOUNT	STD	{ int cheriabi_nmount( \
+				    __capability struct iovec_c *iovp, \
+				    unsigned int iovcnt, int flags); }
+379	AUE_NULL	OBSOL	kse_exit
+380	AUE_NULL	OBSOL	kse_wakeup
+381	AUE_NULL	OBSOL	kse_create
+382	AUE_NULL	OBSOL	kse_thr_interrupt
+383	AUE_NULL	OBSOL	kse_release
+384	AUE_NULL	STD	{ int cheriabi___mac_get_proc( \
+				    __capability struct mac_c *mac_p); }
+385	AUE_NULL	STD	{ int cheriabi___mac_set_proc( \
+				    __capability struct mac_c *mac_p); }
+386	AUE_NULL	STD	{ int cheriabi___mac_get_fd(int fd, \
+				    __capability struct mac_c *mac_p); }
+387	AUE_NULL	STD	{ int cheriabi___mac_get_file( \
+				    __capability const char *path_p, \
+				    __capability struct mac_c *mac_p); }
+388	AUE_NULL	STD	{ int cheriabi___mac_set_fd(int fd, \
+				    __capability struct mac_c *mac_p); }
+389	AUE_NULL	STD	{ int cheriabi___mac_set_file( \
+				    __capability const char *path_p, \
+				    __capability struct mac_c *mac_p); }
+390	AUE_NULL	CHERI	{ int kenv(int what, const char *name, \
+				    char *value, int len); }
+391	AUE_LCHFLAGS	CHERI	{ int lchflags(const char *path, \
+				    u_long flags); }
+392	AUE_NULL	CHERI	{ int uuidgen(struct uuid *store, \
+				    int count); }
+393	AUE_SENDFILE	STD	{ int cheriabi_sendfile(int fd, int s, \
+				    off_t offset, \
+				    size_t nbytes, \
+				    __capability struct sf_hdtr_c *hdtr, \
+				    __capability off_t *sbytes, int flags); }
+394	AUE_NULL	CHERI	{ int mac_syscall(const char *policy, \
+				    int call, void *arg); }
+395	AUE_GETFSSTAT	CHERI	{ int getfsstat(struct statfs *buf, \
+				    long bufsize, int flags); }
+396	AUE_STATFS	CHERI	{ int statfs(char *path, \
+				    struct statfs *buf); }
+397	AUE_FSTATFS	CHERI	{ int fstatfs(int fd, struct statfs *buf); }
+398	AUE_FHSTATFS	CHERI	{ int fhstatfs(const struct fhandle *u_fhp, \
+				    struct statfs *buf); }
+399	AUE_NULL	UNIMPL	nosys
+400	AUE_NULL	OBSOL	ksem_close
+401	AUE_NULL	OBSOL	ksem_post
+402	AUE_NULL	OBSOL	ksem_wait
+403	AUE_NULL	OBSOL	ksem_trywait
+404	AUE_NULL	OBSOL	ksem_init
+405	AUE_NULL	OBSOL	ksem_open
+406	AUE_NULL	OBSOL	ksem_unlink
+407	AUE_NULL	OBSOL	ksem_getvalue
+408	AUE_NULL	OBSOL	ksem_destroy
+409	AUE_NULL	STD	{ int cheriabi___mac_get_pid(pid_t pid, \
+				    __capability struct mac_c *mac_p); }
+410	AUE_NULL	STD	{ int cheriabi___mac_get_link( \
+				    __capability const char *path_p, \
+				    __capability struct mac_c *mac_p); }
+411	AUE_NULL	STD	{ int cheriabi___mac_set_link( \
+				    __capability const char *path_p, \
+				    __capability struct mac_c *mac_p); }
+412	AUE_EXTATTR_SET_LINK	CHERI	{ ssize_t extattr_set_link( \
+				    const char *path, int attrnamespace, \
+				    const char *attrname, void *data, \
+				    size_t nbytes); }
+413	AUE_EXTATTR_GET_LINK	CHERI	{ ssize_t extattr_get_link( \
+				    const char *path, int attrnamespace, \
+				    const char *attrname, void *data, \
+				    size_t nbytes); }
+414	AUE_EXTATTR_DELETE_LINK	CHERI	{ int extattr_delete_link( \
+				    const char *path, int attrnamespace, \
+				    const char *attrname); }
+415	AUE_NULL	STD	{ int cheriabi___mac_execve( \
+				    __capability char *fname, \
+				    __capability char **argv, \
+				    __capability char **envv, \
+				    __capability struct mac_c *mac_p); }
+416	AUE_SIGACTION	STD	{ int cheriabi_sigaction(int sig, \
+				    __capability struct sigaction_c *act, \
+				    __capability struct sigaction_c *oact); }
+417	AUE_SIGRETURN	STD	{ int cheriabi_sigreturn( \
+		    	__capability const struct ucontext_c *sigcntxp); }
+418	AUE_NULL	UNIMPL	__xstat
+419	AUE_NULL	UNIMPL	__xfstat
+420	AUE_NULL	UNIMPL	__xlstat
+421	AUE_NULL	STD	{ int cheriabi_getcontext( \
+				    __capability struct ucontext_c *ucp); }
+422	AUE_NULL	STD	{ int cheriabi_setcontext( \
+				    __capability const struct ucontext_c *ucp); }
+423	AUE_NULL	STD	{ int cheriabi_swapcontext( \
+				    __capability struct ucontext_c *oucp, \
+				    __capability const struct ucontext_c *ucp); }
+424	AUE_SWAPOFF	CHERI	{ int swapoff(const char *name); }
+425	AUE_NULL	CHERI	{ int __acl_get_link(const char *path, \
+				    acl_type_t type, struct acl *aclp); }
+426	AUE_NULL	CHERI	{ int __acl_set_link(const char *path, \
+				    acl_type_t type, struct acl *aclp); }
+427	AUE_NULL	CHERI	{ int __acl_delete_link(const char *path, \
+				    acl_type_t type); }
+428	AUE_NULL	CHERI	{ int __acl_aclcheck_link(const char *path, \
+				    acl_type_t type, struct acl *aclp); }
+429	AUE_SIGWAIT	CHERI	{ int sigwait(const sigset_t *set, \
+				    int *sig); }
+430	AUE_NULL	STD	{ int cheriabi_thr_create( \
+				    __capability ucontext_t *ctx, \
+				    __capability long *id, int flags); }
+431	AUE_NULL	CHERI	{ void thr_exit(long *state); }
+432	AUE_NULL	CHERI	{ int thr_self(long *id); }
+433	AUE_NULL	CHERI	{ int thr_kill(long id, int sig); }
+434	AUE_NULL	UNIMPL	nosys
+435	AUE_NULL	UNIMPL	nosys
+436	AUE_NULL	CHERI	{ int jail_attach(int jid); }
+437	AUE_EXTATTR_LIST_FD	CHERI	{ ssize_t extattr_list_fd(int fd, \
+				    int attrnamespace, void *data, \
+				    size_t nbytes); }
+438	AUE_EXTATTR_LIST_FILE	CHERI	{ ssize_t extattr_list_file( \
+				    const char *path, int attrnamespace, \
+				    void *data, size_t nbytes); }
+439	AUE_EXTATTR_LIST_LINK	CHERI	{ ssize_t extattr_list_link( \
+				    const char *path, int attrnamespace, \
+				    void *data, size_t nbytes); }
+440	AUE_NULL	OBSOL	kse_switchin
+441	AUE_NULL	NOSTD|NOPROTO	{ int ksem_timedwait(semid_t id, \
+				    const struct timespec *abstime); }
+442	AUE_NULL	CHERI	{ int thr_suspend( \
+				    const struct timespec *timeout); }
+443	AUE_NULL	CHERI	{ int thr_wake(long id); }
+444	AUE_MODUNLOAD	CHERI	{ int kldunloadf(int fileid, int flags); }
+445	AUE_AUDIT	CHERI	{ int audit(const void *record, \
+				    u_int length); }
+446	AUE_AUDITON	CHERI	{ int auditon(int cmd, void *data, \
+				    u_int length); }
+447	AUE_GETAUID	CHERI	{ int getauid(uid_t *auid); }
+448	AUE_SETAUID	CHERI	{ int setauid(uid_t *auid); }
+449	AUE_GETAUDIT	CHERI	{ int getaudit(struct auditinfo *auditinfo); }
+450	AUE_SETAUDIT	CHERI	{ int setaudit(struct auditinfo *auditinfo); }
+451	AUE_GETAUDIT_ADDR	CHERI	{ int getaudit_addr( \
+				    struct auditinfo_addr *auditinfo_addr, \
+				    u_int length); }
+452	AUE_SETAUDIT_ADDR	CHERI	{ int setaudit_addr( \
+				    struct auditinfo_addr *auditinfo_addr, \
+				    u_int length); }
+453	AUE_AUDITCTL	CHERI	{ int auditctl(char *path); }
+; XXXBD: do uaddr(2) need special handling?
+454	AUE_NULL	CHERI	{ int _umtx_op(void *obj, int op,\
+				    u_long val, void *uaddr1, \
+				    void *uaddr2); }
+455	AUE_NULL	STD	{ int cheriabi_thr_new(	\
+				    __capability struct thr_param_c *param,	\
+				    int param_size); }
+456	AUE_NULL	CHERI	{ int sigqueue(pid_t pid, int signum, \
+				    void *value); }
+457	AUE_NULL	NOSTD|NOPROTO	{ int kmq_open( \
+				    const char *path, int flags, mode_t mode, \
+				    const struct mq_attr *attr); }
+458	AUE_NULL	NOSTD|NOPROTO	{ int kmq_setattr(int mqd, \
+				    const struct mq_attr *attr,	\
+				    struct mq_attr *oattr); }
+459	AUE_NULL	NOSTD|NOPROTO	{ int kmq_timedreceive(int mqd, \
+				    char *msg_ptr, size_t msg_len,	\
+				    unsigned *msg_prio,			\
+				    const struct timespec *abs_timeout); }
+460	AUE_NULL	NOSTD|NOPROTO	{ int kmq_timedsend(int mqd,	\
+				    const char *msg_ptr, size_t msg_len,\
+				    unsigned msg_prio,			\
+				    const struct timespec *abs_timeout);}
+461	AUE_NULL	NOSTD	{ int cheriabi_kmq_notify(int mqd,	\
+				    __capability const struct sigevent *sigev); }
+462	AUE_NULL	NOPROTO|NOSTD	{ int kmq_unlink(const char *path); }
+463	AUE_NULL	CHERI	{ int abort2(const char *why, int nargs, void **args); }
+464	AUE_NULL 	CHERI	{ int thr_set_name(long id, const char *name); }
+465	AUE_NULL	NOSTD	{ int cheriabi_aio_fsync(int op, \
+				    __capability struct aiocb_c *aiocbp); }
+466	AUE_RTPRIO	CHERI	{ int rtprio_thread(int function, \
+				    lwpid_t lwpid, struct rtprio *rtp); }
+467	AUE_NULL	UNIMPL	nosys
+468	AUE_NULL	UNIMPL	nosys
+469	AUE_NULL	UNIMPL	__getpath_fromfd
+470	AUE_NULL	UNIMPL	__getpath_fromaddr
+471	AUE_NULL	NOPROTO|NOSTD	{ int sctp_peeloff(int sd, uint32_t name); }
+472	AUE_NULL	NOPROTO|NOSTD	{ int sctp_generic_sendmsg(int sd, caddr_t msg, int mlen, \
+				    caddr_t to, __socklen_t tolen, \
+				    struct sctp_sndrcvinfo *sinfo, int flags); }
+; XXXAM: caddr_t can not be used with __capability
+; 473	AUE_NULL	NOSTD	{ int cheriabi_sctp_generic_sendmsg_iov(int sd, struct iovec_c *iov, int iovlen, \
+; 				    caddr_t to, __socklen_t tolen, \
+; 				    struct sctp_sndrcvinfo *sinfo, int flags); }
+; 474	AUE_NULL	NOSTD	{ int cheriabi_sctp_generic_recvmsg(int sd, struct iovec_c *iov, int iovlen, \
+; 				    struct sockaddr * from, __socklen_t *fromlenaddr, \
+; 				    struct sctp_sndrcvinfo *sinfo, int *msg_flags); }
+473	AUE_NULL	NOSTD	{ int cheriabi_sctp_generic_sendmsg_iov(int sd, \
+				    __capability struct iovec_c *iov, int iovlen, \
+				    __capability char *to, __socklen_t tolen, \
+				    __capability struct sctp_sndrcvinfo *sinfo, int flags); }
+474	AUE_NULL	NOSTD	{ int cheriabi_sctp_generic_recvmsg(int sd, \
+				    __capability struct iovec_c *iov, int iovlen, \
+				    __capability struct sockaddr * from, \
+				    __capability __socklen_t *fromlenaddr, \
+				    __capability struct sctp_sndrcvinfo *sinfo, \
+				    __capability int *msg_flags); }
+475	AUE_PREAD	CHERI	{ ssize_t pread(int fd, \
+				    void *buf,size_t nbyte, \
+				    off_t offset); }
+476	AUE_PWRITE	CHERI	{ ssize_t pwrite(int fd, \
+				    const void *buf, size_t nbyte, \
+				    off_t offset); }
+; XXXAM: caddr_t can not be qualified with __capability
+; 477	AUE_MMAP	STD { caddr_t cheriabi_mmap(caddr_t addr, \
+; 				    size_t len, int prot, int flags, int fd, \
+; 				    off_t pos); }
+477	AUE_MMAP	STD { caddr_t cheriabi_mmap(__capability char *addr, \
+				    size_t len, int prot, int flags, int fd, \
+				    off_t pos); }
+
+478	AUE_LSEEK	CHERI	{ off_t lseek(int fd, off_t offset, \
+				    int whence); }
+479	AUE_TRUNCATE	CHERI	{ int truncate(char *path, off_t length); }
+480	AUE_FTRUNCATE	CHERI	{ int ftruncate(int fd, off_t length); }
+481	AUE_KILL	CHERI	{ int thr_kill2(pid_t pid, long id, int sig); }
+482	AUE_SHMOPEN	CHERI	{ int shm_open(const char *path, int flags, \
+				    mode_t mode); }
+483	AUE_SHMUNLINK	CHERI	{ int shm_unlink(const char *path); }
+484	AUE_NULL	CHERI	{ int cpuset(cpusetid_t *setid); }
+485	AUE_NULL	CHERI	{ int cpuset_setid(cpuwhich_t which, \
+				    id_t id, cpusetid_t setid); }
+486	AUE_NULL	CHERI	{ int cpuset_getid(cpulevel_t level, \
+				    cpuwhich_t which, id_t id, \
+				    cpusetid_t *setid); }
+487	AUE_NULL	CHERI	{ int cpuset_getaffinity( \
+				    cpulevel_t level, cpuwhich_t which, \
+				    id_t id, size_t cpusetsize, \
+				    cpuset_t *mask); }
+488	AUE_NULL	CHERI	{ int cpuset_setaffinity( \
+				    cpulevel_t level, cpuwhich_t which, \
+				    id_t id, size_t cpusetsize, \
+				    const cpuset_t *mask); }
+489	AUE_FACCESSAT	CHERI	{ int faccessat(int fd, char *path, int amode, \
+				    int flag); }
+; XXXAM: path argument should be non-const? see kern/syscalls.master
+490	AUE_FCHMODAT	CHERI	{ int fchmodat(int fd, char *path, \
+				    mode_t mode, int flag); }
+491	AUE_FCHOWNAT	CHERI	{ int fchownat(int fd, char *path, uid_t uid, \
+				    gid_t gid, int flag); }
+; XXXAM: turn chericap into capabilities
+492	AUE_FEXECVE	STD	{ int cheriabi_fexecve(int fd, \
+				    __capability void *argv, \
+				    __capability void *envv); }
+493	AUE_FSTATAT	CHERI	{ int fstatat(int fd, char *path, \
+				    struct stat *buf, int flag); }
+494	AUE_FUTIMESAT	CHERI	{ int futimesat(int fd, char *path, \
+				    struct timeval *times); }
+495	AUE_LINKAT	CHERI	{ int linkat(int fd1, char *path1, int fd2, \
+				    char *path2, int flag); }
+496	AUE_MKDIRAT	CHERI	{ int mkdirat(int fd, char *path, \
+				    mode_t mode); }
+497	AUE_MKFIFOAT	CHERI	{ int mkfifoat(int fd, char *path, \
+				    mode_t mode); }
+498	AUE_MKNODAT	CHERI	{ int mknodat(int fd, char *path, \
+				    mode_t mode, dev_t dev); }
+499	AUE_OPENAT_RWTC	CHERI	{ int openat(int fd, char *path, int flag, \
+				    mode_t mode); }
+500	AUE_READLINKAT	CHERI	{ int readlinkat(int fd, char *path, char *buf, \
+				    size_t bufsize); }
+; XXXAM: new should be non-const? see kern/syscalls.master
+501	AUE_RENAMEAT	CHERI	{ int renameat(int oldfd, char *old, int newfd, \
+				    char *new); }
+502	AUE_SYMLINKAT	CHERI	{ int symlinkat(char *path1, int fd, \
+				    char *path2); }
+503	AUE_UNLINKAT	CHERI	{ int unlinkat(int fd, char *path, \
+				    int flag); }
+504	AUE_POSIX_OPENPT	CHERI	{ int posix_openpt(int flags); }
+; 505 is initialised by the kgssapi code, if present.
+505	AUE_NULL	NOSTD|NOPROTO	{ int gssd_syscall(char *path); }
+506	AUE_NULL	STD	{ int cheriabi_jail_get( \
+				    __capability struct iovec_c *iovp, \
+				    unsigned int iovcnt, int flags); }
+507	AUE_NULL	STD	{ int cheriabi_jail_set( \
+				    __capability struct iovec_c *iovp, \
+				    unsigned int iovcnt, int flags); }
+508	AUE_NULL	CHERI	{ int jail_remove(int jid); }
+509	AUE_CLOSEFROM	CHERI	{ int closefrom(int lowfd); }
+510	AUE_SEMCTL	NOSTD { int cheriabi___semctl(int semid, int semnum, \
+				    int cmd, \
+				    __capability union semun_c *arg); }
+511	AUE_MSGCTL	NOSTD	{ int cheriabi_msgctl(int msqid, int cmd, \
+				    __capability struct msqid_ds_c *buf); }
+512	AUE_SHMCTL	NOSTD|NOPROTO	{ int shmctl(int shmid, int cmd, \
+				    __capability struct shmid_ds *buf); }
+513	AUE_LPATHCONF	CHERI	{ int lpathconf(char *path, int name); }
+514	AUE_NULL	OBSOL	cap_new
+515	AUE_CAP_RIGHTS_GET	CHERI	{ int __cap_rights_get(int version, \
+				    int fd, cap_rights_t *rightsp); }
+516	AUE_CAP_ENTER	CHERI	{ int cap_enter(void); }
+517	AUE_CAP_GETMODE	CHERI	{ int cap_getmode(u_int *modep); }
+518	AUE_PDFORK	CHERI	{ int pdfork(int *fdp, int flags); }
+519	AUE_PDKILL	CHERI	{ int pdkill(int fd, int signum); }
+520	AUE_PDGETPID	CHERI	{ int pdgetpid(int fd, pid_t *pidp); }
+521	AUE_PDWAIT	UNIMPL	pdwait4
+522	AUE_SELECT	CHERI	{ int pselect(int nd, fd_set *in, \
+				    fd_set *ou, fd_set *ex, \
+				    const struct timespec *ts, \
+				    const sigset_t *sm); }
+523	AUE_NULL	CHERI	{ int getloginclass(char *namebuf, \
+				    size_t namelen); }
+524	AUE_NULL	CHERI	{ int setloginclass(const char *namebuf); }
+525	AUE_NULL	CHERI	{ int rctl_get_racct(const void *inbufp, \
+				    size_t inbuflen, void *outbufp, \
+				    size_t outbuflen); }
+526	AUE_NULL	CHERI	{ int rctl_get_rules(const void *inbufp, \
+				    size_t inbuflen, void *outbufp, \
+				    size_t outbuflen); }
+527	AUE_NULL	CHERI	{ int rctl_get_limits(const void *inbufp, \
+				    size_t inbuflen, void *outbufp, \
+				    size_t outbuflen); }
+528	AUE_NULL	CHERI	{ int rctl_add_rule(const void *inbufp, \
+				    size_t inbuflen, void *outbufp, \
+				    size_t outbuflen); }
+529	AUE_NULL	CHERI	{ int rctl_remove_rule(const void *inbufp, \
+				    size_t inbuflen, void *outbufp, \
+				    size_t outbuflen); }
+530	AUE_NULL	CHERI	{ int posix_fallocate(int fd,\
+				    off_t offset, off_t len); }
+531	AUE_NULL	CHERI	{ int posix_fadvise(int fd, off_t offset, \
+				    off_t len, int advice); }
+532	AUE_WAIT6	STD	{ int cheriabi_wait6(int idtype, id_t id, \
+				    __capability int *status, int options, \
+				    __capability struct __wrusage *wrusage, \
+				    __capability struct __siginfo_c *info); }
+533	AUE_CAP_RIGHTS_LIMIT	CHERI	{ \
+				    int cap_rights_limit(int fd, \
+				    cap_rights_t *rightsp); }
+534	AUE_CAP_IOCTLS_LIMIT	CHERI	{ \
+				    int cap_ioctls_limit(int fd, \
+				    const u_long *cmds, size_t ncmds); }
+535	AUE_CAP_IOCTLS_GET	CHERI	{ \
+				    ssize_t cap_ioctls_get(int fd, \
+				    u_long *cmds, size_t maxcmds); }
+536	AUE_CAP_FCNTLS_LIMIT	CHERI	{ int cap_fcntls_limit(int fd, \
+				    uint32_t fcntlrights); }
+537	AUE_CAP_FCNTLS_GET	CHERI	{ int cap_fcntls_get(int fd, \
+				    uint32_t *fcntlrightsp); }
+538	AUE_BINDAT	CHERI	{ int bindat(int fd, int s, caddr_t name, \
+				    int namelen); }
+539	AUE_CONNECTAT	CHERI	{ int connectat(int fd, int s, caddr_t name, \
+				    int namelen); }
+540	AUE_CHFLAGSAT	CHERI	{ int chflagsat(int fd, const char *path, \
+				    u_long flags, int atflag); }
+541	AUE_ACCEPT	CHERI	{ int accept4(int s, \
+				    struct sockaddr * __restrict name, \
+				    __socklen_t * __restrict anamelen, \
+				    int flags); }
+542	AUE_PIPE	CHERI	{ int pipe2(int *fildes, int flags); }
+543	AUE_NULL	NOSTD	{ int cheriabi_aio_mlock( \
+				    __capability struct aiocb_c *aiocbp); }
+544	AUE_NULL	CHERI	{ int procctl(int idtype, id_t id, \
+				    int com, void *data); }
+545	AUE_POLL	CHERI	{ int ppoll(struct pollfd *fds, u_int nfds, \
+				    const struct timespec *ts, \
+				    const sigset_t *set); }
+546	AUE_FUTIMES	CHERI	{ int futimens(int fd, struct timespec *times); }
+547	AUE_FUTIMESAT	CHERI	{ int utimensat(int fd, char *path, \
+				    struct timespec *times, int flag); }
+548	AUE_NULL	CHERI	{ int numa_getaffinity(cpuwhich_t which, \
+				    id_t id, \
+				    struct vm_domain_policy_entry *policy); }
+549	AUE_NULL	CHERI	{ int numa_setaffinity(cpuwhich_t which, \
+				    id_t id, \
+				    const struct vm_domain_policy_entry *policy); }

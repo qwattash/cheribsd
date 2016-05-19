@@ -41,13 +41,14 @@ sysarg="sysarg.switch.$$"
 sysprotoend="sysprotoend.$$"
 systracetmp="systrace.$$"
 systraceret="systraceret.$$"
+syscheristubs="syscheristubs.$$"
 
 # default input files:
 capabilities_conf="capabilities.conf"
 
-trap "rm $sysaue $sysdcl $syscompat $syscompatdcl $syscompat4 $syscompat4dcl $syscompat6 $syscompat6dcl $syscompat7 $syscompat7dcl $sysent $sysinc $sysarg $sysprotoend $systracetmp $systraceret" 0
+trap "rm $sysaue $sysdcl $syscompat $syscompatdcl $syscompat4 $syscompat4dcl $syscompat6 $syscompat6dcl $syscompat7 $syscompat7dcl $sysent $sysinc $sysarg $sysprotoend $systracetmp $systraceret $syscheristubs" 0
 
-touch $sysaue $sysdcl $syscompat $syscompatdcl $syscompat4 $syscompat4dcl $syscompat6 $syscompat6dcl $syscompat7 $syscompat7dcl $sysent $sysinc $sysarg $sysprotoend $systracetmp $systraceret
+touch $sysaue $sysdcl $syscompat $syscompatdcl $syscompat4 $syscompat4dcl $syscompat6 $syscompat6dcl $syscompat7 $syscompat7dcl $sysent $sysinc $sysarg $sysprotoend $systracetmp $systraceret $syscheristubs
 
 case $# in
     0)	echo "usage: $0 input-file <config-file>" 1>&2
@@ -105,6 +106,7 @@ s/\$//g
 		systrace = \"$systrace\"
 		systracetmp = \"$systracetmp\"
 		systraceret = \"$systraceret\"
+		syscheristubs = \"$syscheristubs\"
 		compat = \"$compat\"
 		compat4 = \"$compat4\"
 		compat6 = \"$compat6\"
@@ -296,6 +298,32 @@ s/\$//g
 		    infile, NR, was, wanted
 		exit 1
 	}
+	function cheriabi_stub() {
+	    # Generate functions that cast capability pointers back to the
+	    # original type and call the legacy kernel handler
+	    # This assumes that parseline has been called.
+	    printf("%s\ncheriabi_stub_%s(struct thread *td, struct cheriabi_stub_%s *uap)\n{", rettype, funcname, argalias) > syscheristubs
+	    printf("\tstruct %s legacy_uap;\n", argalias) > syscheristubs
+	    for (i = 1; i <= argc; i++) {
+		arg = argtype[i]
+		name = argname[i]
+		if (argtype[i] ~ /\*/) {
+		    printf("\tlegacy_uap.%s = (%s) uap->%s;\n", name, arg, name) > syscheristubs
+		    argtype[i] = "__capability " arg
+		}
+		else if (argtype[i] == "caddr_t") {
+		    # can not add __capability qualifier to a typedef-ed pointer
+		    printf("\tlegacy_uap.%s = (%s) uap->%s;\n", name, arg, name) > syscheristubs
+		    argtype[i] = "__capability char *"
+		}
+		else
+		    printf("\tlegacy_uap.%s = uap->%s;\n", name, name) > syscheristubs
+	    }
+	    printf("\treturn sys_%s(td, &legacy_uap);\n}\n", funcname) > syscheristubs
+	    # XXX override the name here
+	    funcname = "cheriabi_stub_" funcname
+	    argalias = "cheriabi_stub_" argalias
+	}
 	function parseline() {
 		f=4			# toss number, type, audit event
 		argc= 0;
@@ -393,7 +421,8 @@ s/\$//g
 			f += 2;			# skip name, and any comma
 		}
 		if (argc != 0)
-			argssize = "AS(" argalias ")"
+		        argssize = argc
+			# argssize = "AS(" argalias ")"
 	}
 	{	comment = $4
 		if (NF < 7)
@@ -416,8 +445,12 @@ s/\$//g
 	}
 
 	type("STD") || type("NODEF") || type("NOARGS") || type("NOPROTO") \
-	    || type("NOSTD") {
+	|| type("NOSTD") || type("CHERI"){
 		parseline()
+		if (flag("CHERI")) {
+		    # XXX: note that funcname and argalias are overridden with the stub ones
+		    cheriabi_stub()
+		}
 		printf("\t/* %s */\n\tcase %d: {\n", funcname, syscall) > systrace
 		printf("\t/* %s */\n\tcase %d:\n", funcname, syscall) > systracetmp
 		printf("\t/* %s */\n\tcase %d:\n", funcname, syscall) > systraceret
@@ -428,10 +461,11 @@ s/\$//g
 				arg = argtype[i]
 				sub("__restrict$", "", arg)
 				printf("\t\tcase %d:\n\t\t\tp = \"%s\";\n\t\t\tbreak;\n", i - 1, arg) > systracetmp
-				if (index(arg, "*") > 0 || arg == "caddr_t" || arg ~ /intptr_t/)
+				if (index(arg, "*") > 0 || arg == "caddr_t" || arg ~ /intptr_t/) {
 					printf("\t\tuarg[%d] = (intptr_t) p->%s; /* %s */\n", \
 					     i - 1, \
 					     argname[i], arg) > systrace
+				}
 				else if (arg == "union l_semun")
 					printf("\t\tuarg[%d] = p->%s.buf; /* %s */\n", \
 					     i - 1, \
@@ -453,8 +487,7 @@ s/\$//g
 		}
 		printf("\t\t*n_args = %d;\n\t\tbreak;\n\t}\n", argc) > systrace
 		printf("\t\tbreak;\n") > systracetmp
-		if (argc != 0 && !flag("NOARGS") && !flag("NOPROTO") && \
-		    !flag("NODEF")) {
+		if (argc != 0 && (flag("CHERI") || (!flag("NOARGS") && !flag("NOPROTO") && !flag("NODEF")))) {
 			printf("struct %s {\n", argalias) > sysarg
 			for (i = 1; i <= argc; i++)
 				printf("\tchar %s_l_[PADL_(%s)]; " \
@@ -464,9 +497,9 @@ s/\$//g
 				    argname[i], argtype[i]) > sysarg
 			printf("};\n") > sysarg
 		}
-		else if (!flag("NOARGS") && !flag("NOPROTO") && !flag("NODEF"))
-			printf("struct %s {\n\tregister_t dummy;\n};\n",
-			    argalias) > sysarg
+	        else if (flag("CHERI") || (!flag("NOARGS") && !flag("NOPROTO") && !flag("NODEF")))
+		        printf("struct %s {\n\tregister_t dummy;\n};\n",
+			     argalias) > sysarg
 
 		if (argc != 0 && !flag("NOARGS") && !flag("NODEF")) {
 			printf("\t[%s%s] = {\n",
@@ -502,7 +535,7 @@ s/\$//g
 			printf "\t},\n" > sysargmap
 		}
 
-		if (!flag("NOPROTO") && !flag("NODEF")) {
+		if (flag("CHERI") || (!flag("NOPROTO") && !flag("NODEF"))) {
 			if (funcname == "nosys" || funcname == "lkmnosys" ||
 			    funcname == "sysarch" ||
 			    funcname ~ /^cheriabi/ || funcname ~ /^freebsd/ ||
@@ -711,7 +744,7 @@ s/\$//g
 		printf "\tdefault:\n\t\tbreak;\n\t};\n\tif (p != NULL)\n\t\tstrlcpy(desc, p, descsz);\n}\n" > systraceret
 	} '
 
-cat $sysinc $sysent >> $syssw
+cat $sysinc $sysent $syscheristubs >> $syssw
 cat $sysarg $sysdcl \
 	$syscompat $syscompatdcl \
 	$syscompat4 $syscompat4dcl \
@@ -720,4 +753,3 @@ cat $sysarg $sysdcl \
 	$sysaue $sysprotoend > $sysproto
 cat $systracetmp >> $systrace
 cat $systraceret >> $systrace
-

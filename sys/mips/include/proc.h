@@ -94,7 +94,17 @@ struct mdproc {
 struct syscall_args {
 	u_int code;
 	struct sysent *callp;
-	register_t args[8];
+	/* 
+	 * Mips syscalls use the args member of the union while
+	 * CHERI-aware code access the arguments as c_args.
+	 */
+	union {
+#ifdef CHERI_KERNEL
+		__capability void *c_args[8];
+#endif
+		register_t args[8];
+
+	};
 	int narg;
 	struct trapframe *trapframe;
 };

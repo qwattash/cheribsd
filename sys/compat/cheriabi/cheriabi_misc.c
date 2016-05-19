@@ -137,6 +137,136 @@ static int cheriabi_kevent_copyout(void *arg, struct kevent *kevp, int count);
 static int cheriabi_kevent_copyin(void *arg, struct kevent *kevp, int count);
 
 int
+syscallcheri_register(int *offset, struct sysent *new_sysent,
+    struct sysent *old_sysent, int flags)
+{
+	if ((flags & ~SY_THR_STATIC) != 0)
+		return (EINVAL);
+
+	if (*offset == NO_SYSCALL) {
+		int i;
+
+		for (i = 1; i < CHERIABI_SYS_MAXSYSCALL; ++i)
+			if (cheriabi_sysent[i].sy_call ==
+			    (sy_call_t *)lkmnosys)
+				break;
+		if (i == CHERIABI_SYS_MAXSYSCALL)
+			return (ENFILE);
+		*offset = i;
+	} else if (*offset < 0 || *offset >= CHERIABI_SYS_MAXSYSCALL)
+		return (EINVAL);
+	else if (cheriabi_sysent[*offset].sy_call != (sy_call_t *)lkmnosys &&
+		 cheriabi_sysent[*offset].sy_call != (sy_call_t *)lkmressys)
+		return (EEXIST);
+
+	*old_sysent = cheriabi_sysent[*offset];
+	cheriabi_sysent[*offset] = *new_sysent;
+	atomic_store_rel_32(&cheriabi_sysent[*offset].sy_thrcnt, flags);
+	return (0);
+}
+
+int
+syscallcheri_deregister(int *offset, struct sysent *old_sysent)
+{
+	struct sysent *se;
+	if (*offset == 0)
+		/* 
+		 * XXX should it be EINVAL?
+		 */
+		return (0);
+
+	se = &cheriabi_sysent[*offset];
+	/* 
+	 * XXXAM: why freebsd32 does not have this check? 
+	 */
+	if ((se->sy_thrcnt & SY_THR_STATIC) != 0)
+		return (EINVAL);
+	/*
+	 * thread_drain is not called in freebsd32, it is static
+	 * in kern_syscall, is it needed?
+	 * syscall_thread_drain(se);
+	 */
+	cheriabi_sysent[*offset] = *old_sysent;
+	return (0);
+}
+
+int
+syscallcheri_module_handler(struct module *mod, int what, void *arg)
+{
+	struct syscall_module_data *data = (struct syscall_module_data*)arg;
+	modspecific_t ms;
+	int error;
+
+	switch (what) {
+	case MOD_LOAD:
+		error = syscallcheri_register(data->offset, data->new_sysent,
+			    &data->old_sysent, SY_THR_STATIC_KLD);
+		if (error) {
+			/* Leave a mark so we know to safely unload below. */
+			data->offset = NULL;
+			return error;
+		}
+		ms.intval = *data->offset;
+		MOD_XLOCK;
+		module_setspecific(mod, &ms);
+		MOD_XUNLOCK;
+		if (data->chainevh)
+			error = data->chainevh(mod, what, data->chainarg);
+		return (error);
+	case MOD_UNLOAD:
+		/*
+		 * MOD_LOAD failed, so just return without calling the
+		 * chained handler since we didn't pass along the MOD_LOAD
+		 * event.
+		 */
+		if (data->offset == NULL)
+			return (0);
+		if (data->chainevh) {
+			error = data->chainevh(mod, what, data->chainarg);
+			if (error)
+				return (error);
+		}
+		error = syscallcheri_deregister(data->offset, &data->old_sysent);
+		return (error);
+	default:
+		error = EOPNOTSUPP;
+		if (data->chainevh)
+			error = data->chainevh(mod, what, data->chainarg);
+		return (error);
+	}
+}
+
+int
+syscallcheri_helper_register(struct syscall_helper_data *sd, int flags)
+{
+	struct syscall_helper_data *sd1;
+	int error;
+
+	for (sd1 = sd; sd1->syscall_no != NO_SYSCALL; sd1++) {
+		error = syscallcheri_register(&sd1->syscall_no, &sd1->new_sysent,
+		            &sd1->old_sysent, flags);
+		if (error != 0) {
+			syscallcheri_helper_unregister(sd);
+			return (error);
+		}
+		sd1->registered = 1;
+	}
+	return (0);
+}
+
+int
+syscallcheri_helper_unregister(struct syscall_helper_data *sd)
+{
+	struct syscall_helper_data *sd1;
+
+	for (sd1 = sd; sd1->registered != 0; sd1++) {
+		syscallcheri_deregister(&sd1->syscall_no, &sd1->old_sysent);
+		sd1->registered = 0;
+	}
+	return (0);
+}
+
+int
 cheriabi_wait6(struct thread *td, struct cheriabi_wait6_args *uap)
 {
 	struct __wrusage wru, *wrup;
@@ -158,12 +288,12 @@ cheriabi_wait6(struct thread *td, struct cheriabi_wait6_args *uap)
 	if (error != 0)
 		return (error);
 	if (uap->status != NULL)
-		error = copyout(&status, uap->status, sizeof(status));
+		error = copyout(&status, (int *)uap->status, sizeof(status));
 	if (uap->wrusage != NULL && error == 0)
-		error = copyout(&wru, uap->wrusage, sizeof(wru));
+		error = copyout(&wru, (struct __wrusage *)uap->wrusage, sizeof(wru));
 	if (uap->info != NULL && error == 0) {
 		siginfo_to_siginfo_c (&si, &si_c);
-		error = copyout(&si_c, uap->info, sizeof(si_c));
+		error = copyout(&si_c, (struct __siginfo_c *)uap->info, sizeof(si_c));
 	}
 	return (error);
 }
@@ -178,7 +308,7 @@ cheriabi_sigaltstack(struct thread *td,
 	int error;
 
 	if (uap->ss != NULL) {
-		error = copyincap(uap->ss, &s_c, sizeof(s_c));
+		error = copyincap((cheriabi_stack_t *)uap->ss, &s_c, sizeof(s_c));
 		if (error)
 			return (error);
 		/* XXX-BD: check that s_c.ss_sp's length is >= s_c.ss_size */
@@ -203,7 +333,7 @@ cheriabi_sigaltstack(struct thread *td,
 			cheriabi_get_signal_stack_capability(td, &s_c.ss_sp);
 			CP(oss, s_c, ss_size);
 			CP(oss, s_c, ss_flags);
-			error = copyout(&s_c, uap->oss, sizeof(s_c));
+			error = copyout(&s_c, (cheriabi_stack_t *)uap->oss, sizeof(s_c));
 		}
 	}
 	return (error);
@@ -323,8 +453,8 @@ cheriabi_execve(struct thread *td, struct cheriabi_execve_args *uap)
 	error = pre_execve(td, &oldvmspace);
 	if (error != 0)
 		return (error);
-	error = cheriabi_exec_copyin_args(&eargs, uap->fname, UIO_USERSPACE,
-	    uap->argv, uap->envv);
+	error = cheriabi_exec_copyin_args(&eargs, (char *)uap->fname, UIO_USERSPACE,
+					  (void *)uap->argv, (void *)uap->envv);
 	if (error == 0)
 		error = kern_execve(td, &eargs, NULL);
 	post_execve(td, error, oldvmspace);
@@ -342,7 +472,7 @@ cheriabi_fexecve(struct thread *td, struct cheriabi_fexecve_args *uap)
 	if (error != 0)
 		return (error);
 	error = cheriabi_exec_copyin_args(&eargs, NULL, UIO_SYSSPACE,
-	    uap->argv, uap->envv);
+					  (void *)uap->argv, (void *)uap->envv);
 	if (error == 0) {
 		eargs.fd = uap->fd;
 		error = kern_execve(td, &eargs, NULL);
@@ -378,7 +508,8 @@ cheriabi_kevent_copyout(void *arg, struct kevent *kevp, int count)
 		cheri_capability_copy(&ks_c[i].udata,
 		    (struct chericap *)kevp[i].udata + 1);
 	}
-	error = copyoutcap(ks_c, uap->eventlist, count * sizeof(*ks_c));
+	error = copyoutcap(ks_c, (struct kevent_c *)uap->eventlist,
+			   count * sizeof(*ks_c));
 	if (error == 0)
 		uap->eventlist += count;
 	return (error);
@@ -397,7 +528,8 @@ cheriabi_kevent_copyin(void *arg, struct kevent *kevp, int count)
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
 	uap = (struct cheriabi_kevent_args *)arg;
 
-	error = copyincap(uap->changelist, ks_c, count * sizeof *ks_c);
+	error = copyincap((const struct kevent_c *)uap->changelist,
+			  ks_c, count * sizeof *ks_c);
 	if (error)
 		goto done;
 	uap->changelist += count;
@@ -437,7 +569,8 @@ cheriabi_kevent(struct thread *td, struct cheriabi_kevent_args *uap)
 
 
 	if (uap->timeout) {
-		error = copyin(uap->timeout, &ts, sizeof(ts));
+		error = copyin((const struct timespec *)uap->timeout,
+			       &ts, sizeof(ts));
 		if (error)
 			return (error);
 		tsp = &ts;
@@ -495,7 +628,8 @@ cheriabi_readv(struct thread *td, struct cheriabi_readv_args *uap)
 	struct uio *auio;
 	int error;
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
+				   uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = kern_readv(td, uap->fd, auio);
@@ -509,7 +643,8 @@ cheriabi_writev(struct thread *td, struct cheriabi_writev_args *uap)
 	struct uio *auio;
 	int error;
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
+				   uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = kern_writev(td, uap->fd, auio);
@@ -523,7 +658,8 @@ cheriabi_preadv(struct thread *td, struct cheriabi_preadv_args *uap)
 	struct uio *auio;
 	int error;
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
+				   uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = kern_preadv(td, uap->fd, auio, uap->offset);
@@ -537,7 +673,8 @@ cheriabi_pwritev(struct thread *td, struct cheriabi_pwritev_args *uap)
 	struct uio *auio;
 	int error;
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
+				   uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = kern_pwritev(td, uap->fd, auio, uap->offset);
@@ -626,7 +763,7 @@ cheriabi_recvmsg(struct thread *td,
 
 	int error;
 
-	error = cheriabi_copyinmsghdr(uap->msg, &msg);
+	error = cheriabi_copyinmsghdr((struct msghdr_c *)uap->msg, &msg);
 	if (error)
 		return (error);
 	error = cheriabi_copyiniov((struct iovec_c *)msg.msg_iov, msg.msg_iovlen,
@@ -645,7 +782,8 @@ cheriabi_recvmsg(struct thread *td,
 		 * Message contents have already been copied out, update
 		 * lengths.
 		 */
-		error = cheriabi_copyoutmsghdr(&msg, uap->msg);
+		error = cheriabi_copyoutmsghdr(&msg,
+			    (struct msghdr_c *)uap->msg);
 	}
 	free(iov, M_IOV);
 
@@ -654,7 +792,7 @@ cheriabi_recvmsg(struct thread *td,
 
 int
 cheriabi_sendmsg(struct thread *td,
-		  struct cheriabi_sendmsg_args *uap)
+		 struct cheriabi_sendmsg_args *uap)
 {
 	struct msghdr msg;
 	struct iovec *iov;
@@ -662,7 +800,7 @@ cheriabi_sendmsg(struct thread *td,
 	struct sockaddr *to = NULL;
 	int error;
 
-	error = cheriabi_copyinmsghdr(uap->msg, &msg);
+	error = cheriabi_copyinmsghdr((struct msghdr_c *)uap->msg, &msg);
 	if (error)
 		return (error);
 	error = cheriabi_copyiniov((struct iovec_c *)msg.msg_iov, msg.msg_iovlen,
@@ -742,7 +880,8 @@ cheriabi_do_sendfile(struct thread *td,
 	hdr_uio = trl_uio = NULL;
 
 	if (uap->hdtr != NULL) {
-		error = copyincap(uap->hdtr, &hdtr_c, sizeof(hdtr_c));
+		error = copyincap((struct sf_hdtr_c *)uap->hdtr,
+				  &hdtr_c, sizeof(hdtr_c));
 		if (error)
 			goto out;
 		PTRIN_CP(hdtr_c, hdtr, headers);
@@ -777,7 +916,7 @@ cheriabi_do_sendfile(struct thread *td,
 	fdrop(fp, td);
 
 	if (uap->sbytes != NULL)
-		copyout(&sbytes, uap->sbytes, sizeof(off_t));
+		copyout(&sbytes, (off_t *)uap->sbytes, sizeof(off_t));
 
 out:
 	if (hdr_uio)
@@ -801,7 +940,7 @@ cheriabi_jail(struct thread *td, struct cheriabi_jail_args *uap)
 	int error;
 	struct jail j;
 
-	error = copyin(uap->jail, &version, sizeof(uint32_t));
+	error = copyin((struct jail_c *)uap->jail, &version, sizeof(uint32_t));
 	if (error)
 		return (error);
 
@@ -816,7 +955,7 @@ cheriabi_jail(struct thread *td, struct cheriabi_jail_args *uap)
 		/* FreeBSD multi-IPv4/IPv6,noIP jails. */
 		struct jail_c j_c;
 
-		error = copyincap(uap->jail, &j_c, sizeof(j_c));
+		error = copyincap((struct jail_c *)uap->jail, &j_c, sizeof(j_c));
 		if (error)
 			return (error);
 		CP(j_c, j, version);
@@ -847,7 +986,7 @@ cheriabi_jail_set(struct thread *td, struct cheriabi_jail_set_args *uap)
 	if (uap->iovcnt & 1)
 		return (EINVAL);
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp, uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = kern_jail_set(td, auio, uap->flags);
@@ -865,7 +1004,7 @@ cheriabi_jail_get(struct thread *td, struct cheriabi_jail_get_args *uap)
 	if (uap->iovcnt & 1)
 		return (EINVAL);
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp, uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = kern_jail_get(td, auio, uap->flags);
@@ -899,7 +1038,7 @@ cheriabi_sigaction(struct thread *td, struct cheriabi_sigaction_args *uap)
 	int error, perms, tagged;
 
 	if (uap->act) {
-		error = copyincap(uap->act, &sa_c, sizeof(sa_c));
+		error = copyincap((struct sigaction_c *)uap->act, &sa_c, sizeof(sa_c));
 		if (error)
 			return (error);
 		sa.sa_handler = PTRIN(sa_c.sa_u);
@@ -925,7 +1064,7 @@ cheriabi_sigaction(struct thread *td, struct cheriabi_sigaction_args *uap)
 		cheri_memcpy(&sa_c.sa_u, &cap, sizeof(cap));
 		CP(osa, sa_c, sa_flags);
 		CP(osa, sa_c, sa_mask);
-		error = copyoutcap(&sa_c, uap->oact, sizeof(sa_c));
+		error = copyoutcap(&sa_c, (struct sigaction_c *)uap->oact, sizeof(sa_c));
 	}
 	return (error);
 }
@@ -952,7 +1091,7 @@ int cheriabi_ktimer_create(struct thread *td,
 		evp = NULL;
 	} else {
 		evp = &ev;
-		error = copyincap(uap->evp, &ev_c, sizeof(ev_c));
+		error = copyincap((struct sigevent_c *)uap->evp, &ev_c, sizeof(ev_c));
 		if (error != 0)
 			return (error);
 		error = convert_sigevent_c(&ev_c, &ev);
@@ -961,7 +1100,7 @@ int cheriabi_ktimer_create(struct thread *td,
 	}
 	error = kern_ktimer_create(td, uap->clock_id, evp, &id, -1);
 	if (error == 0) {
-		error = copyout(&id, uap->timerid, sizeof(int));
+		error = copyout(&id, (int *)uap->timerid, sizeof(int));
 		if (error != 0)
 			kern_ktimer_delete(td, id);
 	}
@@ -988,7 +1127,7 @@ cheriabi_thr_new(struct thread *td,
 		return (EINVAL);
 	bzero(&param, sizeof(param));
 	bzero(&param_c, sizeof(param_c));
-	error = copyincap(uap->param, &param_c, uap->param_size);
+	error = copyincap((struct thr_param_c *)uap->param, &param_c, uap->param_size);
 	if (error != 0)
 		return (error);
 	param.start_func = (void *)param_c.start_func;	/* Bogus cast */
@@ -1039,14 +1178,14 @@ cheriabi_sigtimedwait(struct thread *td, struct cheriabi_sigtimedwait_args *uap)
 	int error;
 
 	if (uap->timeout) {
-		error = copyin(uap->timeout, &ts, sizeof(ts));
+		error = copyin((const struct timespec *)uap->timeout, &ts, sizeof(ts));
 		if (error)
 			return (error);
 		timeout = &ts;
 	} else
 		timeout = NULL;
 
-	error = copyin(uap->set, &set, sizeof(set));
+	error = copyin((const sigset_t *)uap->set, &set, sizeof(set));
 	if (error)
 		return (error);
 
@@ -1056,7 +1195,7 @@ cheriabi_sigtimedwait(struct thread *td, struct cheriabi_sigtimedwait_args *uap)
 
 	if (uap->info) {
 		siginfo_to_siginfo_c(&ksi.ksi_info, &si_c);
-		error = copyout(&si_c, uap->info, sizeof(struct siginfo_c));
+		error = copyout(&si_c, (siginfo_t *)uap->info, sizeof(struct siginfo_c));
 	}
 
 	if (error == 0)
@@ -1075,7 +1214,7 @@ cheriabi_sigwaitinfo(struct thread *td, struct cheriabi_sigwaitinfo_args *uap)
 	sigset_t set;
 	int error;
 
-	error = copyin(uap->set, &set, sizeof(set));
+	error = copyin((const sigset_t *)uap->set, &set, sizeof(set));
 	if (error)
 		return (error);
 
@@ -1085,7 +1224,7 @@ cheriabi_sigwaitinfo(struct thread *td, struct cheriabi_sigwaitinfo_args *uap)
 
 	if (uap->info) {
 		siginfo_to_siginfo_c(&ksi.ksi_info, &si_c);
-		error = copyout(&si_c, uap->info, sizeof(struct siginfo_c));
+		error = copyout(&si_c, (siginfo_t *)uap->info, sizeof(struct siginfo_c));
 	}	
 	if (error == 0)
 		td->td_retval[0] = ksi.ksi_signo;
@@ -1129,7 +1268,7 @@ cheriabi_nmount(struct thread *td,
 	if ((uap->iovcnt & 1) || (uap->iovcnt < 4))
 		return (EINVAL);
 
-	error = cheriabi_copyinuio(uap->iovp, uap->iovcnt, &auio);
+	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp, uap->iovcnt, &auio);
 	if (error)
 		return (error);
 	error = vfs_donmount(td, flags, auio);
@@ -1137,34 +1276,6 @@ cheriabi_nmount(struct thread *td,
 	free(auio, M_IOV);
 	return (error);
 }
-
-#if 0
-int
-syscallcheri_register(int *offset, struct sysent *new_sysent,
-    struct sysent *old_sysent, int flags)
-{
-}
-
-int
-syscallcheri_deregister(int *offset, struct sysent *old_sysent)
-{
-}
-
-int
-syscallcheri_module_handler(struct module *mod, int what, void *arg)
-{
-}
-
-int
-syscallcheri_helper_register(struct syscall_helper_data *sd, int flags)
-{
-}
-
-int
-syscallcheri_helper_unregister(struct syscall_helper_data *sd)
-{
-}
-#endif
 
 #define sucap(uaddr, base, length, perms)				\
 	do {								\
@@ -1463,7 +1574,7 @@ cheriabi_mmap(struct thread *td, struct cheriabi_mmap_args *uap)
 	int tagged;
 	size_t cap_len, cap_offset;
 	struct chericap addr_cap;
-
+	
 	/* MAP_CHERI_NOSETBOUNDS requires MAP_FIXED. */
 	if ((flags & (MAP_CHERI_NOSETBOUNDS | MAP_FIXED)) ==
 	    MAP_CHERI_NOSETBOUNDS) {
@@ -1595,7 +1706,7 @@ cheriabi_mmap(struct thread *td, struct cheriabi_mmap_args *uap)
 					    "%s: insufficent space to shift "
 					    "addr (%p) down in capability "
 					    "(offset 0x%zx)", __func__,
-					    uap->addr, cap_offset);
+					    (caddr_t)uap->addr, cap_offset);
 #endif
 				return (EPROT);
 			}
