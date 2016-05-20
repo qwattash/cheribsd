@@ -503,7 +503,7 @@ struct sysent cheriabi_sysent[] = {
 	{ 2, (sy_call_t *)cheriabi_stub_truncate, AUE_TRUNCATE, NULL, 0, 0, 0, SY_THR_STATIC },	/* 479 = truncate */
 	{ 2, (sy_call_t *)cheriabi_stub_ftruncate, AUE_FTRUNCATE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 480 = ftruncate */
 	{ 3, (sy_call_t *)cheriabi_stub_thr_kill2, AUE_KILL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 481 = thr_kill2 */
-	{ 3, (sy_call_t *)cheriabi_stub_shm_open, AUE_SHMOPEN, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 482 = shm_open */
+	{ 3, (sy_call_t *)cheriabi_shm_open, AUE_SHMOPEN, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 482 = cheriabi_shm_open */
 	{ 1, (sy_call_t *)cheriabi_stub_shm_unlink, AUE_SHMUNLINK, NULL, 0, 0, 0, SY_THR_STATIC },	/* 483 = shm_unlink */
 	{ 1, (sy_call_t *)cheriabi_stub_cpuset, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 484 = cpuset */
 	{ 3, (sy_call_t *)cheriabi_stub_cpuset_setid, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 485 = cpuset_setid */
@@ -2272,14 +2272,6 @@ cheriabi_stub_thr_kill2(struct thread *td, struct cheriabi_stub_thr_kill2_args *
 	legacy_uap.id = uap->id;
 	legacy_uap.sig = uap->sig;
 	return sys_thr_kill2(td, &legacy_uap);
-}
-int
-cheriabi_stub_shm_open(struct thread *td, struct cheriabi_stub_shm_open_args *uap)
-{	struct shm_open_args legacy_uap;
-	legacy_uap.path = (const char *) uap->path;
-	legacy_uap.flags = uap->flags;
-	legacy_uap.mode = uap->mode;
-	return sys_shm_open(td, &legacy_uap);
 }
 int
 cheriabi_stub_shm_unlink(struct thread *td, struct cheriabi_stub_shm_unlink_args *uap)

@@ -250,6 +250,7 @@ compat/cheriabi/cheriabi_mac.c		optional compat_cheriabi
 compat/cheriabi/cheriabi_misc.c		optional compat_cheriabi
 compat/cheriabi/cheriabi_syscalls.c	optional compat_cheriabi
 compat/cheriabi/cheriabi_sysent.c	optional compat_cheriabi
+compat/cheriabi/cheriabi_sysargmap.c	optional compat_cheriabi
 # dtrace specific
 cddl/contrib/opensolaris/uts/common/dtrace/dtrace.c	optional dtrace compile-with "${DTRACE_C}" \
 							warning "kernel contains CDDL licensed DTRACE"

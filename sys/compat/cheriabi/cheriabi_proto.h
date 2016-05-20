@@ -1269,7 +1269,7 @@ struct cheriabi_stub_thr_kill2_args {
 	char id_l_[PADL_(long)]; long id; char id_r_[PADR_(long)];
 	char sig_l_[PADL_(int)]; int sig; char sig_r_[PADR_(int)];
 };
-struct cheriabi_stub_shm_open_args {
+struct cheriabi_shm_open_args {
 	char path_l_[PADL_(__capability const char *)]; __capability const char * path; char path_r_[PADR_(__capability const char *)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char mode_l_[PADL_(mode_t)]; mode_t mode; char mode_r_[PADR_(mode_t)];
@@ -1886,7 +1886,7 @@ int	cheriabi_stub_lseek(struct thread *, struct cheriabi_stub_lseek_args *);
 int	cheriabi_stub_truncate(struct thread *, struct cheriabi_stub_truncate_args *);
 int	cheriabi_stub_ftruncate(struct thread *, struct cheriabi_stub_ftruncate_args *);
 int	cheriabi_stub_thr_kill2(struct thread *, struct cheriabi_stub_thr_kill2_args *);
-int	cheriabi_stub_shm_open(struct thread *, struct cheriabi_stub_shm_open_args *);
+int	cheriabi_shm_open(struct thread *, struct cheriabi_shm_open_args *);
 int	cheriabi_stub_shm_unlink(struct thread *, struct cheriabi_stub_shm_unlink_args *);
 int	cheriabi_stub_cpuset(struct thread *, struct cheriabi_stub_cpuset_args *);
 int	cheriabi_stub_cpuset_setid(struct thread *, struct cheriabi_stub_cpuset_setid_args *);
@@ -2272,7 +2272,7 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 #define	CHERIABI_SYS_AUE_truncate	AUE_TRUNCATE
 #define	CHERIABI_SYS_AUE_ftruncate	AUE_FTRUNCATE
 #define	CHERIABI_SYS_AUE_thr_kill2	AUE_KILL
-#define	CHERIABI_SYS_AUE_shm_open	AUE_SHMOPEN
+#define	CHERIABI_SYS_AUE_cheriabi_shm_open	AUE_SHMOPEN
 #define	CHERIABI_SYS_AUE_shm_unlink	AUE_SHMUNLINK
 #define	CHERIABI_SYS_AUE_cpuset	AUE_NULL
 #define	CHERIABI_SYS_AUE_cpuset_setid	AUE_NULL

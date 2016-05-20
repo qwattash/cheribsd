@@ -2589,9 +2589,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* cheriabi_stub_shm_open */
+	/* cheriabi_shm_open */
 	case 482: {
-		struct cheriabi_stub_shm_open_args *p = params;
+		struct cheriabi_shm_open_args *p = params;
 		uarg[0] = (intptr_t) p->path; /* __capability const char * */
 		iarg[1] = p->flags; /* int */
 		iarg[2] = p->mode; /* mode_t */
@@ -7408,7 +7408,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* cheriabi_stub_shm_open */
+	/* cheriabi_shm_open */
 	case 482:
 		switch(ndx) {
 		case 0:
@@ -9984,7 +9984,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* cheriabi_stub_shm_open */
+	/* cheriabi_shm_open */
 	case 482:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
