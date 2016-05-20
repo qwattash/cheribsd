@@ -71,6 +71,10 @@ __FBSDID("$FreeBSD$");
 #include <machine/pcb.h>
 #endif
 
+#ifdef CHERI_KERNEL
+#include <compat/cheriabi/cheriabi_sysargmap.h>
+#endif
+
 #include <security/mac/mac_framework.h>
 
 /*
@@ -467,11 +471,43 @@ ktrsyscall(code, narg, args)
 	struct ktr_syscall *ktp;
 	size_t buflen;
 	char *buf = NULL;
+#ifdef CHERI_KERNEL
+	int i;
+	register_t *sa_int_tmp;
+	uintptr_t sa_ptr_tmp;
+	register_t *c_buf = (register_t *)buf;
+	__capability void **c_args = (__capability void **)args;
+#endif
 
 	buflen = sizeof(register_t) * narg;
+
 	if (buflen > 0) {
 		buf = malloc(buflen, M_KTRACE, M_WAITOK);
+#ifdef CHERI_KERNEL
+		/*
+		 * XXXAM: For now cast capabilities back to pointers, this needs
+		 * access to the sysargmap to determine the size and alignment
+		 * of each argument.
+		 */
+		for (i = 0; i < narg; i++) {
+			if (CHERIABI_SYS_argmap[code].sam_ptrmask & 1 << i) {
+				sa_ptr_tmp = (uintptr_t)c_args;
+				if ((sa_ptr_tmp & ~(-CHERICAP_SIZE)) != 0) {
+					sa_ptr_tmp = (uintptr_t)(c_args + 1) &
+						-CHERICAP_SIZE;
+					c_args = (__capability void **)sa_ptr_tmp;
+				}
+				c_buf[i] = (register_t)((void *)*c_args);
+			}
+			else {
+				sa_int_tmp = (register_t *)c_args;
+				c_buf[i] = *sa_int_tmp++;
+				c_args = (__capability void **)sa_int_tmp;
+			}
+		}
+#else
 		bcopy(args, buf, buflen);
+#endif
 	}
 	req = ktr_getrequest(KTR_SYSCALL);
 	if (req == NULL) {
