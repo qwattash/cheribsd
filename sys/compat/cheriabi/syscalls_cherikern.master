@@ -879,7 +879,8 @@
 479	AUE_TRUNCATE	CHERI	{ int truncate(char *path, off_t length); }
 480	AUE_FTRUNCATE	CHERI	{ int ftruncate(int fd, off_t length); }
 481	AUE_KILL	CHERI	{ int thr_kill2(pid_t pid, long id, int sig); }
-482	AUE_SHMOPEN	CHERI	{ int shm_open(const char *path, int flags, \
+482	AUE_SHMOPEN	STD	{ int cheriabi_shm_open( \
+				    __capability const char *path, int flags, \
 				    mode_t mode); }
 483	AUE_SHMUNLINK	CHERI	{ int shm_unlink(const char *path); }
 484	AUE_NULL	CHERI	{ int cpuset(cpusetid_t *setid); }

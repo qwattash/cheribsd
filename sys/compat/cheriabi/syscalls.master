@@ -824,7 +824,7 @@
 479	AUE_TRUNCATE	NOPROTO	{ int truncate(char *path, off_t length); }
 480	AUE_FTRUNCATE	NOPROTO	{ int ftruncate(int fd, off_t length); }
 481	AUE_KILL	NOPROTO	{ int thr_kill2(pid_t pid, long id, int sig); }
-482	AUE_SHMOPEN	NOPROTO	{ int shm_open(const char *path, int flags, \
+482	AUE_SHMOPEN	STD	{ int cheriabi_shm_open(const char *path, int flags, \
 				    mode_t mode); }
 483	AUE_SHMUNLINK	NOPROTO	{ int shm_unlink(const char *path); }
 484	AUE_NULL	NOPROTO	{ int cpuset(cpusetid_t *setid); }

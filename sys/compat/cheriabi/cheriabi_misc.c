@@ -106,6 +106,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/cpu.h>
 #include <machine/cheri.h>
 #include <machine/elf.h>
+#include <machine/cheric.h>
 
 #include <security/audit/audit.h>
 
@@ -1565,6 +1566,31 @@ cheriabi_elf_fixup(register_t **stack_base, struct image_params *imgp)
 	cheriabi_set_auxargs(base, imgp);
 
 	return (0);
+}
+
+int
+cheriabi_shm_open(struct thread *td, struct cheriabi_shm_open_args *uap)
+{
+	struct shm_open_args legacy_uap;
+
+#ifdef CHERI_KERNEL
+	/*
+	 * Check that the special path value SHM_ANON is the only one allowed
+	 * to be received with the capability tag unset.
+	 *
+	 * XXX: is EFAULT the correct one?
+	 */
+	if (!cheri_gettag(uap->path)) {
+		legacy_uap.path = (const char *)cheri_getoffset(uap->path);
+		if (legacy_uap.path != SHM_ANON)
+			return (EFAULT);
+	}
+	else
+#endif
+		legacy_uap.path = (const char *)uap->path;
+	legacy_uap.flags = uap->flags;
+	legacy_uap.mode = uap->mode;
+	return sys_shm_open(td, &legacy_uap);
 }
 
 int
