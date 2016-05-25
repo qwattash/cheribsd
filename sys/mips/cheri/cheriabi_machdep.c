@@ -138,12 +138,12 @@ SYSINIT(cheriabi, SI_SUB_EXEC, SI_ORDER_ANY,
     &freebsd_cheriabi_brand_info);
 
 void
-cheriabi_fetch_syscall_arg(struct thread *td, struct chericap *arg,
+cheriabi_fetch_syscall_arg(struct thread *td, chericap_t *arg,
     int syscall_no, int argnum)
 {
 	struct trapframe *locr0 = td->td_frame;	 /* aka td->td_pcb->pcv_regs */
 	struct cheri_frame *capreg = &td->td_pcb->pcb_cheriframe;
-	struct chericap *arg_capp;
+	chericap_t *arg_capp;
 	struct sysentvec *se;
 	int i, intreg_offset, ptrreg_offset, ptrmask, is_ptr_arg;
 	register_t arg_reg;
@@ -854,7 +854,7 @@ cheriabi_exec_setregs(struct thread *td, struct image_params *imgp, u_long stack
 
 	bzero((caddr_t)td->td_frame, sizeof(struct trapframe));
 
-	KASSERT(stack % sizeof(struct chericap) == 0,
+	KASSERT(stack % sizeof(chericap_t) == 0,
 	    ("CheriABI stack pointer not properly aligned"));
 
 	td->td_proc->p_md.md_cheri_mmap_perms = CHERI_CAP_USER_DATA_PERMS |
@@ -909,7 +909,7 @@ cheriabi_exec_setregs(struct thread *td, struct image_params *imgp, u_long stack
 }
 
 void
-cheriabi_get_signal_stack_capability(struct thread *td, struct chericap *csig)
+cheriabi_get_signal_stack_capability(struct thread *td, chericap_t *csig)
 {
 
 	cheri_capability_copy(csig, &td->td_pcb->pcb_cherisignal.csig_c11);
@@ -920,7 +920,7 @@ cheriabi_get_signal_stack_capability(struct thread *td, struct chericap *csig)
  * the default stack capability.
  */
 void
-cheriabi_set_signal_stack_capability(struct thread *td, struct chericap *csig)
+cheriabi_set_signal_stack_capability(struct thread *td, chericap_t *csig)
 {
 
 	cheri_capability_copy(&td->td_pcb->pcb_cherisignal.csig_c11,
@@ -969,7 +969,7 @@ cheriabi_sysarch(struct thread *td, struct cheriabi_sysarch_args *uap)
 
 	case MIPS_GET_TLS:
 		error = copyoutcap(&td->td_md.md_tls_cap, parms,
-		    sizeof(struct chericap));
+		    sizeof(chericap_t));
 		return (error);
 
 	case CHERI_MMAP_GETPERM:

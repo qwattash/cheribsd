@@ -128,11 +128,11 @@ DB_SHOW_COMMAND(cheriframe, ddb_dump_cheriframe)
 	/* Laboriously load and print each user capability. */
 	for (i = 0; i < 27; i++) {
 		cheri_capability_load(CHERI_CR_CTEMP0,
-		    (struct chericap *)&cfp->cf_c0 + i);
+		    (chericap_t *)&cfp->cf_c0 + i);
 		DB_CHERI_REG_PRINT(CHERI_CR_CTEMP0, i);
 	}
 	cheri_capability_load(CHERI_CR_CTEMP0,
-	    (struct chericap *)&cfp->cf_c0 + CHERIFRAME_OFF_PCC);
+	    (chericap_t *)&cfp->cf_c0 + CHERIFRAME_OFF_PCC);
 	db_printf("PCC ");
 	DB_CHERI_CAP_PRINT(CHERI_CR_CTEMP0);
 }

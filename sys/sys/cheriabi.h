@@ -31,6 +31,8 @@
 #ifndef _SYS_CHERIABI_H_
 #define _SYS_CHERIABI_H_
 
+#include <machine/cheri.h>
+
 struct cheriabi_execdata {
 	size_t		ce_len;			/* Length of this struct */
 	int		ce_argc;
@@ -42,10 +44,10 @@ struct cheriabi_execdata {
 	struct cheriabi_auxarg *ce_auxargs;
 	struct ps_strings *ce_ps_strings;
 #else
-	struct chericap ce_argv;
-	struct chericap ce_envp;
-	struct chericap ce_auxargs;
-	struct chericap ce_ps_strings;
+	chericap_t ce_argv;
+	chericap_t ce_envp;
+	chericap_t ce_auxargs;
+	chericap_t ce_ps_strings;
 #endif
 };
 

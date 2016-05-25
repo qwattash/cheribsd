@@ -41,15 +41,15 @@
 #include <vm/pmap.h>
 
 struct cheriabi_ps_strings {
-	struct chericap	ps_argvstr;
+	chericap_t	ps_argvstr;
 	int		ps_nargvstr;
-	struct chericap	ps_envstr;
+	chericap_t	ps_envstr;
 	int		ps_nenvstr;
-	struct chericap	ps_sbclasses;
+	chericap_t	ps_sbclasses;
 	size_t		ps_sbclasseslen;
-	struct chericap	ps_sbmethods;
+	chericap_t	ps_sbmethods;
 	size_t		ps_sbmethodslen;
-	struct chericap	ps_sbobjects;
+	chericap_t	ps_sbobjects;
 	size_t		ps_sbobjectslen;
 };
 
@@ -61,7 +61,7 @@ typedef struct {	/* Auxiliary vector entry on initial stack */
 	/* long    pad[(CHERICAP_SIZE / 8) - 1]; */
 	union {
 		long	a_val;		/* Integer value. */
-		struct chericap	a_ptr;	/* Address. */
+		chericap_t	a_ptr;	/* Address. */
 		/* void	(*a_fcn)(void); */ /* Function pointer (not used). */
        } a_un;
 } ElfCheriABI_Auxinfo;
@@ -128,19 +128,19 @@ int	cheriabi_copyiniov(struct iovec_c *iovp, u_int iovcnt,
 
 struct image_args;
 int	cheriabi_exec_copyin_args(struct image_args *args, char *fname,
-	    enum uio_seg segflg, struct chericap *argv, struct chericap *envv);
+	    enum uio_seg segflg, chericap_t *argv, chericap_t *envv);
 
 int	cheriabi_elf_fixup(register_t **stack_base, struct image_params *imgp);
 
 void	cheriabi_get_signal_stack_capability(struct thread *td,
-	    struct chericap *csig);
+	    chericap_t *csig);
 void	cheriabi_set_signal_stack_capability(struct thread *td,
-	    struct chericap *csig);
+	    chericap_t *csig);
 
-void	cheriabi_fetch_syscall_arg(struct thread *td, struct chericap *arg,
+void	cheriabi_fetch_syscall_arg(struct thread *td, chericap_t *arg,
 	    int syscall_no, int argnum);
 
-void	cheriabi_mmap_set_retcap(struct thread *td, struct chericap *retcap,
-	    struct chericap *addr, size_t len, int prot, int flags);
+void	cheriabi_mmap_set_retcap(struct thread *td, chericap_t *retcap,
+	    chericap_t *addr, size_t len, int prot, int flags);
 
 #endif /* !_COMPAT_CHERIABI_CHERIABI_UTIL_H_ */

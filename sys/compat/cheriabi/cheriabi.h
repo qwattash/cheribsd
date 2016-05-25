@@ -36,6 +36,7 @@
 
 #include <machine/cheri.h>
 
+#ifndef CHERI_KERNEL
 static inline void *
 __cheri_cap_to_ptr(struct chericap *c)
 {
@@ -52,25 +53,54 @@ __cheri_cap_to_ptr(struct chericap *c)
  * PTRIN and PTRIN_CP.
  */
 #define PTRIN(v)        __cheri_cap_to_ptr(&v)
-
-#define CP(src,dst,fld) do { (dst).fld = (src).fld; } while (0)
 #define PTRIN_CP(src,dst,fld) \
 	do { (dst).fld = PTRIN((src).fld); } while (0)
+#else
+
+#define PTRIN(v) (void *)v
+#define PTRIN_CP(src,dst,fld) \
+	do { (dst).fld = PTRIN((src).fld); } while (0)
+#endif
+
+#define CP(src,dst,fld) do { (dst).fld = (src).fld; } while (0)
 
 struct kevent_c {
-	struct chericap	ident;		/* identifier for this event */
+#ifdef CHERI_KERNEL		/* identifier for this event */
+	__capability void *ident;
+#else
+	struct chericap	ident;
+#endif
 	short		filter;		/* filter for event */
 	u_short		flags;
 	u_int		fflags;
 	int64_t		data;
-	struct chericap	udata;		/* opaque user data identifier */
+#ifdef CHERI_KERNEL		/* opaque user data identifier */
+	__capability void *udata;
+#else
+	struct chericap	udata;
+#endif
 };
 
 struct iovec_c {
+#ifdef CHERI_KERNEL
+	__capability void *iov_base;
+#else
 	struct chericap	iov_base;
+#endif
 	size_t		iov_len;
 };
 
+#ifdef CHERI_KERNEL
+struct msghdr_c {
+	__capability void	    *msg_name;
+	socklen_t	             msg_namelen;
+	__capability struct iovec_c *msg_iov;
+	int		             msg_iovlen;
+	__capability void	    *msg_control;
+	socklen_t	             msg_controllen;
+	int		             msg_flags;
+};
+#else
 struct msghdr_c {
 	struct chericap	msg_name;
 	socklen_t	msg_namelen;
@@ -80,7 +110,20 @@ struct msghdr_c {
 	socklen_t	msg_controllen;
 	int		msg_flags;
 };
+#endif
 
+#ifdef CHERI_KERNEL
+struct jail_c {
+	uint32_t	              version;
+	__capability char	     *path;
+	__capability char	     *hostname;
+        __capability char	     *jailname;
+	uint32_t	              ip4s;
+	uint32_t	              ip6s;
+	__capability struct in_addr  *ip4;
+	__capability struct in6_addr *ip6;
+};
+#else
 struct jail_c {
 	uint32_t	version;
 	struct chericap	path;
@@ -91,13 +134,38 @@ struct jail_c {
 	struct chericap	ip4;
 	struct chericap ip6;
 };
+#endif
 
 struct sigaction_c {
+#ifdef CHERI_KERNEL
+	/* XXXAM see sigaction for the correct type */
+	__capability void * sa_u;
+#else
 	struct chericap	sa_u;
+#endif
 	int		sa_flags;
 	sigset_t	sa_mask;
 };
 
+#ifdef CHERI_KERNEL
+struct thr_param_c {
+	/* 
+	 * XXXAM
+	 * this is a function pointer, should be a capability?
+	 */
+	uintptr_t	   start_func;
+	__capability void *arg;
+	__capability char *stack_base;
+	size_t		   stack_size;
+	__capability char *tls_base;
+	size_t		   tls_size;
+	__capability long *child_tid;
+	__capability long *parent_tid;
+	int		   flags;
+	__capability struct rtptio *rtp;
+	__capability void *spare[3];
+};
+#else
 struct thr_param_c {
 	uintptr_t	start_func;
 	struct chericap	arg;
@@ -111,10 +179,15 @@ struct thr_param_c {
 	struct chericap	rtp;
 	struct chericap	spare[3];
 };
+#endif
 
 struct mac_c {
 	size_t		m_buflen;
+#ifdef CHERI_KERNEL
+	__capability char *m_string;
+#else
 	struct chericap	m_string;
+#endif
 };
 
 #endif /* !_COMPAT_CHERIABI_CHERIABI_H_ */

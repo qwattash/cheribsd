@@ -104,16 +104,16 @@ SYSCTL_UINT(_security_cheri, OID_AUTO, debugger_on_sigprot, CTLFLAG_RW,
     &security_cheri_debugger_on_sigprot, 0,
     "Enter KDB when SIGPROT is delivered to an unsandboxed thread");
 
-static void	cheri_capability_set_user_c0(struct chericap *);
-static void	cheri_capability_set_user_stack(struct chericap *);
-static void	cheri_capability_set_user_pcc(struct chericap *);
-static void	cheri_capability_set_user_entry(struct chericap *,
+static void	cheri_capability_set_user_c0(chericap_t *);
+static void	cheri_capability_set_user_stack(chericap_t *);
+static void	cheri_capability_set_user_pcc(chericap_t *);
+static void	cheri_capability_set_user_entry(chericap_t *,
 		    unsigned long);
-static void	cheri_capability_set_user_sigcode(struct chericap *,
+static void	cheri_capability_set_user_sigcode(chericap_t *,
 		   struct sysentvec *);
 
 static union {
-	struct chericap	ct_cap;
+	chericap_t	ct_cap;
 	uint8_t		ct_bytes[32];
 } cheri_testunion __aligned(32);
 
@@ -161,7 +161,7 @@ SYSINIT(cheri_cpu_startup, SI_SUB_CPU, SI_ORDER_FIRST, cheri_cpu_startup,
  * explicit base/length/offset arguments is quite the right thing.
  */
 void
-cheri_capability_set(struct chericap *cp, uint32_t perms, void *otypep,
+cheri_capability_set(chericap_t *cp, uint32_t perms, void *otypep,
     void *basep, size_t length, off_t off)
 {
 #ifdef INVARIANTS
@@ -220,7 +220,7 @@ cheri_capability_set(struct chericap *cp, uint32_t perms, void *otypep,
  */
 #ifdef _UNUSED
 static void
-cheri_capability_set_priv(struct chericap *cp)
+cheri_capability_set_priv(chericap_t *cp)
 {
 
 	cheri_capability_set(cp, CHERI_CAP_PRIV_PERMS, CHERI_CAP_PRIV_OTYPE,
@@ -230,7 +230,7 @@ cheri_capability_set_priv(struct chericap *cp)
 #endif
 
 static void
-cheri_capability_set_user_c0(struct chericap *cp)
+cheri_capability_set_user_c0(chericap_t *cp)
 {
 
 	cheri_capability_set(cp, CHERI_CAP_USER_DATA_PERMS,
@@ -239,7 +239,7 @@ cheri_capability_set_user_c0(struct chericap *cp)
 }
 
 static void
-cheri_capability_set_user_stack(struct chericap *cp)
+cheri_capability_set_user_stack(chericap_t *cp)
 {
 
 	/*
@@ -251,7 +251,7 @@ cheri_capability_set_user_stack(struct chericap *cp)
 }
 
 static void
-cheri_capability_set_user_idc(struct chericap *cp)
+cheri_capability_set_user_idc(chericap_t *cp)
 {
 
 	/*
@@ -261,7 +261,7 @@ cheri_capability_set_user_idc(struct chericap *cp)
 }
 
 static void
-cheri_capability_set_user_pcc(struct chericap *cp)
+cheri_capability_set_user_pcc(chericap_t *cp)
 {
 
 	cheri_capability_set(cp, CHERI_CAP_USER_CODE_PERMS,
@@ -270,7 +270,7 @@ cheri_capability_set_user_pcc(struct chericap *cp)
 }
 
 static void
-cheri_capability_set_user_entry(struct chericap *cp, unsigned long entry_addr)
+cheri_capability_set_user_entry(chericap_t *cp, unsigned long entry_addr)
 {
 
 	/*
@@ -283,21 +283,21 @@ cheri_capability_set_user_entry(struct chericap *cp, unsigned long entry_addr)
 }
 
 static void
-cheri_capability_set_user_sigcode(struct chericap *cp, struct sysentvec *se)
+cheri_capability_set_user_sigcode(chericap_t *cp, struct sysentvec *se)
 {
 	uintptr_t base;
 	int szsigcode = *se->sv_szsigcode;
 
 	/* XXX: true for mips64 and mip64-cheriabi... */
 	base = (uintptr_t)se->sv_psstrings - szsigcode;
-	base = rounddown2(base, sizeof(struct chericap));
+	base = rounddown2(base, sizeof(chericap_t));
 
 	cheri_capability_set(cp, CHERI_CAP_USER_CODE_PERMS,
 	    CHERI_CAP_USER_CODE_OTYPE, (void *)base, szsigcode, 0);
 }
 
 static void
-cheri_capability_set_user_type(struct chericap *cp)
+cheri_capability_set_user_type(chericap_t *cp)
 {
 
 	cheri_capability_set(cp, CHERI_CAP_USER_TYPE_PERMS,
@@ -306,7 +306,7 @@ cheri_capability_set_user_type(struct chericap *cp)
 }
 
 void
-cheri_capability_set_null(struct chericap *cp)
+cheri_capability_set_null(chericap_t *cp)
 {
 
 	CHERI_CFROMPTR(CHERI_CR_CTEMP0, CHERI_CR_KDC, NULL);
@@ -314,7 +314,7 @@ cheri_capability_set_null(struct chericap *cp)
 }
 
 void
-cheri_capability_setoffset(struct chericap *cp, register_t offset)
+cheri_capability_setoffset(chericap_t *cp, register_t offset)
 {
 
 	CHERI_CLC(CHERI_CR_CTEMP0, CHERI_CR_KDC, cp, 0);
@@ -333,7 +333,7 @@ cheri_capability_setoffset(struct chericap *cp, register_t offset)
  * XXXRW: Compiler should be providing us with the temporary register.
  */
 void
-cheri_capability_copy(struct chericap *cp_to, struct chericap *cp_from)
+cheri_capability_copy(chericap_t *cp_to, chericap_t *cp_from)
 {
 
 	cheri_capability_load(CHERI_CR_CTEMP0, cp_from);
@@ -392,7 +392,7 @@ cheri_exec_setregs(struct thread *td, unsigned long entry_addr)
 }
 
 void
-cheri_serialize(struct cheri_serial *csp, struct chericap *cap)
+cheri_serialize(struct cheri_serial *csp, chericap_t *cap)
 {
 	register_t	r;
 	cheri_capability_load(CHERI_CR_CTEMP0, cap);

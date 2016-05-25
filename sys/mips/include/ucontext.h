@@ -86,7 +86,7 @@ typedef struct	__mcontext {
 #endif
 #else /* defined(__CHERI_PURE_CAPABILITY__) */
 	struct cheri_frame	mc_cheriframe;	/* capability registers */
-	struct chericap	__spare__[8];
+	chericap_t	__spare__[8];
 #endif /* defined(__CHERI_PURE_CAPABILITY__) */
 } mcontext_t;
 
@@ -132,16 +132,16 @@ typedef struct	__mcontext_c {
 	int		mc_fpused;	/* fp has been used */
 	f_register_t	mc_fpregs[33];	/* fp regs 0 to 31 and csr */
 	register_t	mc_fpc_eir;	/* fp exception instruction reg */
-	struct chericap	mc_tls;		/* pointer to TLS area */
+	chericap_t	mc_tls;		/* pointer to TLS area */
 	__register_t	cause;		/* cause register */
 	struct cheri_frame	mc_cheriframe;	/* capability registers */
-	struct chericap	__spare__[8];
+	chericap_t	__spare__[8];
 } mcontext_c_t;
 
 typedef struct __ucontext_c {
 	sigset_t		uc_sigmask;
 	mcontext_c_t		uc_mcontext;
-	struct chericap		uc_link;
+	chericap_t		uc_link;
 	cheriabi_stack_t	uc_stack;
 	int			uc_flags;
 	int			__spare__[4];

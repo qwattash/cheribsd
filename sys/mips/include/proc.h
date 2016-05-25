@@ -74,7 +74,7 @@ struct mdthread {
 	int		md_cop2owner;
 #endif
 #ifdef CPU_CHERI
-	struct chericap	md_tls_cap;
+	chericap_t	md_tls_cap;
 #endif
 };
 

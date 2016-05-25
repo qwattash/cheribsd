@@ -38,14 +38,22 @@ struct ioc_read_toc_entry_c {
 	u_char	address_format;
 	u_char	starting_track;
 	u_short	data_len;
+#ifdef CHERI_KERNEL
+	__capability struct cd_toc_entry *data;
+#else
 	struct chericap data;		/* struct cd_toc_entry* */
+#endif
 };
 
 struct md_ioctl_c {
 	unsigned	md_version;	/* Structure layout version */
 	unsigned	md_unit;	/* unit number */
 	enum md_types	md_type;	/* type of disk */
+#ifdef CHERI_KERNEL
+	__capability char *md_file;
+#else
 	struct chericap	md_file;	/* pathname of file to mount */
+#endif
 	off_t		md_mediasize;	/* size of disk in bytes */
 	unsigned	md_sectorsize;	/* sectorsize */
 	unsigned	md_options;	/* options */
@@ -57,21 +65,37 @@ struct md_ioctl_c {
 
 struct fiodgname_arg_c {
 	int		len;
+#ifdef CHERI_KERNEL
+	__capability void *buf;
+#else
 	struct chericap	buf;
+#endif
 };
 
 struct mem_range_op_c {
+#ifdef CHERI_KERNEL
+	__capability struct mem_range_desc *mo_desc;
+#else
 	struct chericap	mo_desc;
+#endif
 	int		mo_arg[2];
 };
 
 struct pci_conf_io_c {
 	u_int32_t		pat_buf_len;	/* pattern buffer length */
 	u_int32_t		num_patterns;	/* number of patterns */
+#ifdef CHERI_KERNEL
+	__capability struct pci_match_conf *patterns;
+#else
 	struct chericap		patterns;	/* struct pci_match_conf ptr */
+#endif
 	u_int32_t		match_buf_len;	/* match buffer length */
 	u_int32_t		num_matches;	/* number of matches returned */
+#ifdef CHERI_KERNEL
+	__capability struct pci_conf *matches;
+#else
 	struct chericap		matches;	/* struct pci_conf ptr */
+#endif
 	u_int32_t		offset;		/* offset into device list */
 	u_int32_t		generation;	/* device list generation */
 	u_int32_t		status;		/* request status */
@@ -84,13 +108,23 @@ struct sg_io_hdr_c {
 	u_char		mx_sb_len;
 	u_short		iovec_count;
 	u_int		dxfer_len;
+#ifdef CHERI_KERNEL
+	__capability void *dxferp;
+	__capability u_char *cmdp;
+	__capability u_char *sbp;
+#else
 	struct chericap	dxferp;
 	struct chericap	cmdp;
 	struct chericap	sbp;
+#endif
 	u_int		timeout;
 	u_int		flags;
 	int		pack_id;
+#ifdef CHERI_KERNEL
+	__capability void *usr_ptr;
+#else
 	struct chericap	usr_ptr;
+#endif
 	u_char		status;
 	u_char		masked_status;
 	u_char		msg_status;

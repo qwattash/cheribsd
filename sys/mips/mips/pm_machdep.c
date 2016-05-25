@@ -546,7 +546,7 @@ set_fpregs(struct thread *td, struct fpreg *fpregs)
 #define CHERI_CAP_ADDTAG(dst, src) do {				\
 	register_t tag;						\
 								\
-	cheri_capability_load(CHERI_CR_CTEMP0, (struct chericap *)src);	\
+	cheri_capability_load(CHERI_CR_CTEMP0, (chericap_t *)src);	\
 	CHERI_CGETTAG(tag, CHERI_CR_CTEMP0);			\
 	*dst = (*src & ~(1ULL << 63)) | (tag << 63);		\
 	dst++; src++;						\

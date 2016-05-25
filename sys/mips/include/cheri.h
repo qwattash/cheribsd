@@ -54,11 +54,22 @@ CTASSERT(sizeof(struct chericap) == CHERICAP_SIZE);
 #endif
 
 /*
+ * Capability representation for compilers that
+ * support the __capability qualifier
+ */
+#ifdef CHERI_KERNEL
+typedef __capability void * chericap_t;
+#else
+typedef struct chericap chericap_t;
+#endif
+
+
+/*
  * Canonical C-language representation of a CHERI object capability -- code
  * and data capabilities in registers or memory.
  */
 struct cheri_object {
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 	__capability void	*co_codecap;
 	__capability void	*co_datacap;
 #else
@@ -67,7 +78,7 @@ struct cheri_object {
 #endif
 };
 
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 #define	CHERI_OBJECT_INIT_NULL	{NULL, NULL}
 #define	CHERI_OBJECT_ISNULL(co)	\
     ((co).co_codecap == NULL && (co).co_datacap == NULL)
@@ -83,7 +94,7 @@ struct cheri_object {
  */
 struct cheri_frame {
 	/* c0 has special properties for MIPS load/store instructions. */
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 	__capability void	*cf_c0;
 #else
 	struct chericap	cf_c0;
@@ -93,7 +104,7 @@ struct cheri_frame {
 	 * General-purpose capabilities -- note, numbering is from v1.7 of the
 	 * CHERI ISA spec (ISAv2).
 	 */
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 	__capability void *cf_c1, *cf_c2, *cf_c3, *cf_c4;
 	__capability void *cf_c5, *cf_c6, *cf_c7;
 	__capability void *cf_c8, *cf_c9, *cf_c10, *cf_c11, *cf_c12;
@@ -112,7 +123,7 @@ struct cheri_frame {
 	/*
 	 * Program counter capability -- extracted from exception frame EPCC.
 	 */
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 	__capability void *cf_pcc;
 #else
 	struct chericap	cf_pcc;
@@ -161,7 +172,7 @@ struct cheri_kframe {
  * pointer should (presumably) be relative to the c0/c11 defined here.
  */
 struct cheri_signal {
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 	__capability void	*csig_pcc;
 	__capability void	*csig_c0;
 	__capability void	*csig_c11;
@@ -197,7 +208,7 @@ struct cheri_stack_frame {
 	register_t	_csf_pad1;
 	register_t	_csf_pad2;
 	register_t	_csf_pad3;
-#if !defined(_KERNEL) && __has_feature(capabilities)
+#if defined(CHERI_KERNEL) && __has_feature(capabilities)
 	__capability void	*csf_pcc;
 	__capability void	*csf_idc;
 #else
@@ -758,14 +769,14 @@ struct cheri_stack {
 } while (0)
 
 static inline void
-cheri_capability_load(u_int crn_to, struct chericap *cp)
+cheri_capability_load(u_int crn_to, chericap_t *cp)
 {
 
        CHERI_CLC(crn_to, CHERI_CR_KDC, cp, 0);
 }
 
 static inline void
-cheri_capability_store(u_int crn_from, struct chericap *cp)
+cheri_capability_store(u_int crn_from, chericap_t *cp)
 {
 
         CHERI_CSC(crn_from, CHERI_CR_KDC, cp, 0);
@@ -862,12 +873,12 @@ cheri_get_cyclecount(void)
  * APIs that act on C language representations of capabilities -- but not
  * capabilities themselves.
  */
-void	cheri_capability_copy(struct chericap *cp_to,
-	    struct chericap *cp_from);
-void	cheri_capability_set(struct chericap *cp, uint32_t uperms,
+void	cheri_capability_copy(chericap_t *cp_to,
+	    chericap_t *cp_from);
+void	cheri_capability_set(chericap_t *cp, uint32_t uperms,
 	    void *otype, void *basep, size_t length, off_t off);
-void	cheri_capability_set_null(struct chericap *cp);
-void	cheri_capability_setoffset(struct chericap *cp, register_t offset);
+void	cheri_capability_set_null(chericap_t *cp);
+void	cheri_capability_setoffset(chericap_t *cp, register_t offset);
 
 /*
  * CHERI capability utility functions.

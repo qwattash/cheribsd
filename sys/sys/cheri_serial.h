@@ -32,6 +32,7 @@
 #ifndef _SYS_CHERI_SERIAL_H_
 #define	_SYS_CHERI_SERIAL_H_
 
+#include <machine/cheri.h>
 /*
  * An expanded and serializable representation of CHERI capabilities.
  * This representation is intended to be valid for all variants
@@ -121,9 +122,9 @@ struct cheri_serial {
 	CHERI_SERIAL_PERM_USER14 | CHERI_SERIAL_PERM_USER15)
 
 #if defined(_KERNEL) && defined(CPU_CHERI)
-struct chericap;
+// struct chericap; //XXXAM obsolete
 
-void	cheri_serialize(struct cheri_serial *csp, struct chericap *cap);
+void	cheri_serialize(struct cheri_serial *csp, chericap_t *cap);
 #endif
 
 #endif /* _SYS_CHERI_SERIAL_H_ */

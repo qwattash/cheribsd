@@ -1698,7 +1698,7 @@ done:
 #ifdef COMPAT_CHERIABI
 /* Get the cursor from a capability stored in memory. */
 static inline uintptr_t
-cap_ctoint(struct chericap *cap)
+cap_ctoint(chericap_t *cap)
 {
 	register_t _cursor;
 
@@ -1727,14 +1727,14 @@ get_proc_vector_cheriabi(struct thread *td, struct proc *p,
 		vsize = pss.ps_nargvstr;
 		if (vsize > ARG_MAX)
 			return (ENOEXEC);
-		size = vsize * sizeof(struct chericap);
+		size = vsize * sizeof(chericap_t);
 		break;
 	case PROC_ENV:
 		vptr = (vm_offset_t)cap_ctoint(&pss.ps_envstr);
 		vsize = pss.ps_nenvstr;
 		if (vsize > ARG_MAX)
 			return (ENOEXEC);
-		size = vsize * sizeof(struct chericap);
+		size = vsize * sizeof(chericap_t);
 		break;
 	case PROC_AUX:
 		/*
@@ -1742,7 +1742,7 @@ get_proc_vector_cheriabi(struct thread *td, struct proc *p,
 		 * that the address is naturally aligned.
 		 */
 		vptr = (vm_offset_t)cap_ctoint(&pss.ps_envstr) +
-			(pss.ps_nenvstr + 1) * sizeof(struct chericap);
+			(pss.ps_nenvstr + 1) * sizeof(chericap_t);
 #if __ELF_WORD_SIZE == 64
 		if (vptr % sizeof(uint64_t) != 0)
 #else
