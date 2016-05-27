@@ -70,6 +70,18 @@ struct uio {
 	struct	thread *uio_td;		/* owner */
 };
 
+#ifdef CHERI_KERNEL
+struct uio_c {
+	struct	iovec_c *uio_iov;		/* scatter/gather list */
+	int	uio_iovcnt;		/* length of scatter/gather list */
+	off_t	uio_offset;		/* offset in target object */
+	ssize_t	uio_resid;		/* remaining bytes to process */
+	enum	uio_seg uio_segflg;	/* address space */
+	enum	uio_rw uio_rw;		/* operation */
+	struct	thread *uio_td;		/* owner */
+};
+#endif
+
 /*
  * Limits
  *
@@ -95,6 +107,13 @@ int	copyiniov(const struct iovec *iovp, u_int iovcnt, struct iovec **iov,
 int	copyinstrfrom(const void * __restrict src, void * __restrict dst,
 	    size_t len, size_t * __restrict copied, int seg);
 int	copyinuio(const struct iovec *iovp, u_int iovcnt, struct uio **uiop);
+#ifdef CHERI_KERNEL
+int     copyinuio_cap(const struct iovec *iovp, u_int iovcnt,
+		      struct uio_c **uiop);
+int     uioc2uio(struct uio_c *uio_c, struct uio **uiop);
+int     uio2uioc(struct uio *uio, struct uio_c **uiop);
+struct uio_c *cloneuio_cap(struct uio_c *uiop);
+#endif
 int	copyout_map(struct thread *td, vm_offset_t *addr, size_t sz);
 int	copyout_unmap(struct thread *td, vm_offset_t addr, size_t sz);
 int	physcopyin(void *src, vm_paddr_t dst, size_t len);

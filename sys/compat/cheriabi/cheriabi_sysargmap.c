@@ -11,10 +11,10 @@
 struct CHERIABI_SYS_sam CHERIABI_SYS_argmap[CHERIABI_SYS_MAXSYSCALL] = {
 	[CHERIABI_SYS_exit] = {
 	},
-	[CHERIABI_SYS_read] = {
+	[CHERIABI_SYS_cheriabi_read] = {
 		.sam_ptrmask = 0x2
 	},
-	[CHERIABI_SYS_write] = {
+	[CHERIABI_SYS_cheriabi_write] = {
 		.sam_ptrmask = 0x2
 	},
 	[CHERIABI_SYS_open] = {
@@ -795,10 +795,10 @@ struct CHERIABI_SYS_sam CHERIABI_SYS_argmap[CHERIABI_SYS_MAXSYSCALL] = {
 	[CHERIABI_SYS_cheriabi_sctp_generic_recvmsg] = {
 		.sam_ptrmask = 0x2 | 0x8 | 0x10 | 0x20 | 0x40
 	},
-	[CHERIABI_SYS_pread] = {
+	[CHERIABI_SYS_cheriabi_pread] = {
 		.sam_ptrmask = 0x2
 	},
-	[CHERIABI_SYS_pwrite] = {
+	[CHERIABI_SYS_cheriabi_pwrite] = {
 		.sam_ptrmask = 0x2
 	},
 	[CHERIABI_SYS_cheriabi_mmap] = {

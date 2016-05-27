@@ -43,12 +43,12 @@ struct cheriabi_stub_sys_exit_args {
 struct cheriabi_stub_fork_args {
 	register_t dummy;
 };
-struct cheriabi_stub_read_args {
+struct cheriabi_read_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char buf_l_[PADL_(__capability void *)]; __capability void * buf; char buf_r_[PADR_(__capability void *)];
 	char nbyte_l_[PADL_(size_t)]; size_t nbyte; char nbyte_r_[PADR_(size_t)];
 };
-struct cheriabi_stub_write_args {
+struct cheriabi_write_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char buf_l_[PADL_(__capability const void *)]; __capability const void * buf; char buf_r_[PADR_(__capability const void *)];
 	char nbyte_l_[PADL_(size_t)]; size_t nbyte; char nbyte_r_[PADR_(size_t)];
@@ -1231,13 +1231,13 @@ struct cheriabi_sctp_generic_recvmsg_args {
 	char sinfo_l_[PADL_(__capability struct sctp_sndrcvinfo *)]; __capability struct sctp_sndrcvinfo * sinfo; char sinfo_r_[PADR_(__capability struct sctp_sndrcvinfo *)];
 	char msg_flags_l_[PADL_(__capability int *)]; __capability int * msg_flags; char msg_flags_r_[PADR_(__capability int *)];
 };
-struct cheriabi_stub_pread_args {
+struct cheriabi_pread_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char buf_l_[PADL_(__capability void *)]; __capability void * buf; char buf_r_[PADR_(__capability void *)];
 	char nbyte_l_[PADL_(size_t)]; size_t nbyte; char nbyte_r_[PADR_(size_t)];
 	char offset_l_[PADL_(off_t)]; off_t offset; char offset_r_[PADR_(off_t)];
 };
-struct cheriabi_stub_pwrite_args {
+struct cheriabi_pwrite_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char buf_l_[PADL_(__capability const void *)]; __capability const void * buf; char buf_r_[PADR_(__capability const void *)];
 	char nbyte_l_[PADL_(size_t)]; size_t nbyte; char nbyte_r_[PADR_(size_t)];
@@ -1602,8 +1602,8 @@ struct cheriabi_stub_numa_setaffinity_args {
 #endif
 void	cheriabi_stub_sys_exit(struct thread *, struct cheriabi_stub_sys_exit_args *);
 int	cheriabi_stub_fork(struct thread *, struct cheriabi_stub_fork_args *);
-int	cheriabi_stub_read(struct thread *, struct cheriabi_stub_read_args *);
-int	cheriabi_stub_write(struct thread *, struct cheriabi_stub_write_args *);
+int	cheriabi_read(struct thread *, struct cheriabi_read_args *);
+int	cheriabi_write(struct thread *, struct cheriabi_write_args *);
 int	cheriabi_stub_open(struct thread *, struct cheriabi_stub_open_args *);
 int	cheriabi_stub_close(struct thread *, struct cheriabi_stub_close_args *);
 int	cheriabi_stub_wait4(struct thread *, struct cheriabi_stub_wait4_args *);
@@ -1879,8 +1879,8 @@ int	cheriabi_aio_fsync(struct thread *, struct cheriabi_aio_fsync_args *);
 int	cheriabi_stub_rtprio_thread(struct thread *, struct cheriabi_stub_rtprio_thread_args *);
 int	cheriabi_sctp_generic_sendmsg_iov(struct thread *, struct cheriabi_sctp_generic_sendmsg_iov_args *);
 int	cheriabi_sctp_generic_recvmsg(struct thread *, struct cheriabi_sctp_generic_recvmsg_args *);
-int	cheriabi_stub_pread(struct thread *, struct cheriabi_stub_pread_args *);
-int	cheriabi_stub_pwrite(struct thread *, struct cheriabi_stub_pwrite_args *);
+int	cheriabi_pread(struct thread *, struct cheriabi_pread_args *);
+int	cheriabi_pwrite(struct thread *, struct cheriabi_pwrite_args *);
 int	cheriabi_mmap(struct thread *, struct cheriabi_mmap_args *);
 int	cheriabi_stub_lseek(struct thread *, struct cheriabi_stub_lseek_args *);
 int	cheriabi_stub_truncate(struct thread *, struct cheriabi_stub_truncate_args *);
@@ -1988,8 +1988,8 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 
 #define	CHERIABI_SYS_AUE_exit	AUE_EXIT
 #define	CHERIABI_SYS_AUE_fork	AUE_FORK
-#define	CHERIABI_SYS_AUE_read	AUE_READ
-#define	CHERIABI_SYS_AUE_write	AUE_WRITE
+#define	CHERIABI_SYS_AUE_cheriabi_read	AUE_READ
+#define	CHERIABI_SYS_AUE_cheriabi_write	AUE_WRITE
 #define	CHERIABI_SYS_AUE_open	AUE_OPEN_RWTC
 #define	CHERIABI_SYS_AUE_close	AUE_CLOSE
 #define	CHERIABI_SYS_AUE_wait4	AUE_WAIT4
@@ -2265,8 +2265,8 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 #define	CHERIABI_SYS_AUE_rtprio_thread	AUE_RTPRIO
 #define	CHERIABI_SYS_AUE_cheriabi_sctp_generic_sendmsg_iov	AUE_NULL
 #define	CHERIABI_SYS_AUE_cheriabi_sctp_generic_recvmsg	AUE_NULL
-#define	CHERIABI_SYS_AUE_pread	AUE_PREAD
-#define	CHERIABI_SYS_AUE_pwrite	AUE_PWRITE
+#define	CHERIABI_SYS_AUE_cheriabi_pread	AUE_PREAD
+#define	CHERIABI_SYS_AUE_cheriabi_pwrite	AUE_PWRITE
 #define	CHERIABI_SYS_AUE_cheriabi_mmap	AUE_MMAP
 #define	CHERIABI_SYS_AUE_lseek	AUE_LSEEK
 #define	CHERIABI_SYS_AUE_truncate	AUE_TRUNCATE

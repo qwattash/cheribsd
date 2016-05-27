@@ -166,15 +166,27 @@ int	kern_posix_fallocate(struct thread *td, int fd, off_t offset,
 	    off_t len);
 int	kern_procctl(struct thread *td, enum idtype idtype, id_t id, int com,
 	    void *data);
+#ifdef CHERI_KERNEL
+int	kern_preadv(struct thread *td, int fd, struct uio_c *auio, off_t offset);
+#else
 int	kern_preadv(struct thread *td, int fd, struct uio *auio, off_t offset);
+#endif
 int	kern_pselect(struct thread *td, int nd, fd_set *in, fd_set *ou,
 	    fd_set *ex, struct timeval *tvp, sigset_t *uset, int abi_nfdbits);
 int	kern_ptrace(struct thread *td, int req, pid_t pid, void *addr,
 	    int data);
+#ifdef CHERI_KERNEL
+int	kern_pwritev(struct thread *td, int fd, struct uio_c *auio, off_t offset);
+#else
 int	kern_pwritev(struct thread *td, int fd, struct uio *auio, off_t offset);
+#endif
 int	kern_readlinkat(struct thread *td, int fd, char *path,
 	    enum uio_seg pathseg, char *buf, enum uio_seg bufseg, size_t count);
+#ifdef CHERI_KERNEL
+int	kern_readv(struct thread *td, int fd, struct uio_c *auio);
+#else
 int	kern_readv(struct thread *td, int fd, struct uio *auio);
+#endif
 int	kern_recvit(struct thread *td, int s, struct msghdr *mp,
 	    enum uio_seg fromseg, struct mbuf **controlp);
 int	kern_renameat(struct thread *td, int oldfd, char *old, int newfd,
@@ -258,7 +270,11 @@ int	kern_wait(struct thread *td, pid_t pid, int *status, int options,
 	    struct rusage *rup);
 int	kern_wait6(struct thread *td, enum idtype idtype, id_t id, int *status,
 	    int options, struct __wrusage *wrup, siginfo_t *sip);
+#ifdef CHERI_KERNEL
+int	kern_writev(struct thread *td, int fd, struct uio_c *auio);
+#else
 int	kern_writev(struct thread *td, int fd, struct uio *auio);
+#endif
 int	kern_socketpair(struct thread *td, int domain, int type, int protocol,
 	    int *rsv);
 

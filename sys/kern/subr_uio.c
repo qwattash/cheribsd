@@ -64,10 +64,21 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bus.h>
 
+#ifdef CHERI_KERNEL
+#include <machine/cheric.h>
+#endif
+
 SYSCTL_INT(_kern, KERN_IOV_MAX, iov_max, CTLFLAG_RD, SYSCTL_NULL_INT_PTR, UIO_MAXIOV,
 	"Maximum number of elements in an I/O vector; sysconf(_SC_IOV_MAX)");
 
 static int uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault);
+
+/*
+ * XXXAM move to machine utilities
+ */
+#ifdef CHERI_KERNEL
+#define CAP_ALIGN(ptr) ((uintptr_t)(ptr) & -CHERICAP_SIZE);
+#endif
 
 int
 copyin_nofault(const void *udaddr, void *kaddr, size_t len)
@@ -644,3 +655,140 @@ casuword(volatile u_long *addr, u_long old, u_long new)
 }
 
 #endif /* NO_FUEWORD */
+
+#ifdef CHERI_KERNEL
+/*
+ * Convert cheri uio to non-capability uio.
+ */
+int
+uioc2uio(struct uio_c *uio_c, struct uio **uiop)
+{
+	struct uio *uio;
+	u_int iovlen;
+	int i;
+
+	*uiop = NULL;
+
+	iovlen = uio_c->uio_iovcnt * sizeof (struct iovec);
+	uio = malloc(iovlen + sizeof *uio, M_IOV, M_WAITOK);
+	uio->uio_iov = (struct iovec *)(uio + 1);
+	for (i = 0; i < uio_c->uio_iovcnt; i++) {
+		uio->uio_iov[i].iov_base =
+			(void *)uio_c->uio_iov[i].iov_base;
+		uio->uio_iov[i].iov_len =
+			uio_c->uio_iov[i].iov_len;
+	}
+	uio->uio_iovcnt = uio_c->uio_iovcnt;
+	uio->uio_offset = uio_c->uio_offset;
+	uio->uio_resid = uio_c->uio_resid;
+	uio->uio_segflg = uio_c->uio_segflg;
+	uio->uio_rw = uio_c->uio_rw;
+	uio->uio_td = uio_c->uio_td;
+	*uiop = uio;
+	return (0);
+}
+
+/*
+ * Convert uio to a capability-enabled uio
+ */
+int
+uio2uioc(struct uio *uio, struct uio_c **uiop)
+{
+	struct uio_c *uio_c;
+	u_int iovlen;
+	int i;
+
+	*uiop = NULL;
+
+	iovlen = uio->uio_iovcnt * sizeof (struct iovec_c);
+	uio_c = malloc(iovlen + sizeof *uio, M_IOV, M_WAITOK);
+	uio_c->uio_iov = (struct iovec_c *)(uio_c + 1);
+	for (i = 0; i < uio->uio_iovcnt; i++) {
+		uio_c->uio_iov[i].iov_base =
+			cheri_ptr(uio->uio_iov[i].iov_base,
+				  uio->uio_iov[i].iov_len);
+		uio_c->uio_iov[i].iov_len =
+			uio->uio_iov[i].iov_len;
+	}
+	uio_c->uio_iovcnt = uio->uio_iovcnt;
+	uio_c->uio_offset = uio->uio_offset;
+	uio_c->uio_resid = uio->uio_resid;
+	uio_c->uio_segflg = uio->uio_segflg;
+	uio_c->uio_rw = uio->uio_rw;
+	uio_c->uio_td = uio->uio_td;
+	*uiop = uio_c;
+	return (0);
+}
+
+/*
+ * Copy uio from non-cheri userspace to cheri kernel
+ */
+int
+copyinuio_cap(const struct iovec *iovp, u_int iovcnt, struct uio_c **uiop)
+{
+	struct iovec iov;
+	struct iovec_c *iov_c;
+	struct uio_c *uio;
+	u_int iovlen;
+	int error, i;
+
+	*uiop = NULL;
+	if (iovcnt > UIO_MAXIOV)
+		return (EINVAL);
+	iovlen = iovcnt * sizeof(struct iovec_c) + CHERICAP_SIZE; 
+	/* 
+	 * XXXAM assume that malloc returns a 32-byte aligned area however
+	 * the iovec_c array must be properly aligned after the uio struct
+	 * the padding is the size of uio_c rounded to the higher iovec_c
+	 * multiple
+	 * An extra iovec_c size is added for alignment, probably iovec_c/2
+	 * is enough
+	 */
+	uio = malloc(iovlen + sizeof(*uio), M_IOV, M_WAITOK);
+	iov_c = (struct iovec_c *)CAP_ALIGN(uio + 1);
+	for (i = 0; i < iovcnt; i++) {
+		error = copyin(&iovp[i], &iov, sizeof(struct iovec));
+		if (error) {
+			free(uio, M_IOV);
+			return (error);
+		}
+		iov_c[i].iov_base = cheri_ptr(iov.iov_base, iov.iov_len);
+		iov_c[i].iov_len = iov.iov_len;
+	}
+	uio->uio_iov = iov_c;
+	uio->uio_iovcnt = iovcnt;
+	uio->uio_segflg = UIO_USERSPACE;
+	uio->uio_offset = -1;
+	uio->uio_resid = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov_c->iov_len > IOSIZE_MAX - uio->uio_resid) {
+			free(uio, M_IOV);
+			return (EINVAL);
+		}
+		uio->uio_resid += iov_c->iov_len;
+		iov_c++;
+	}
+	*uiop = uio;
+	return (0);
+}
+
+/*
+ * Clone a capability-enabled uio struct
+ *
+ * XXXAM: this should replace cloneuio once it is replaced
+ * everywhere
+ */
+struct uio_c *
+cloneuio_cap(struct uio_c *uiop)
+{
+	struct uio_c *uio;
+	int iovlen;
+
+	iovlen = uiop->uio_iovcnt * sizeof(struct iovec_c) + CHERICAP_SIZE;
+	uio = malloc(iovlen + sizeof *uio, M_IOV, M_WAITOK);
+	*uio = *uiop;
+	uio->uio_iov = (struct iovec_c *)CAP_ALIGN(uio + 1);
+	cheri_bcopy(uiop->uio_iov, uio->uio_iov, iovlen);
+	return (uio);
+}
+#endif /* CHERI_KERNEL */

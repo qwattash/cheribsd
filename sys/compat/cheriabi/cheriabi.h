@@ -81,14 +81,15 @@ struct kevent_c {
 #endif
 };
 
+/*
+ * XXXAM move to _iovec.h? do we need this?
+ */
+#ifndef CHERI_KERNEL
 struct iovec_c {
-#ifdef CHERI_KERNEL
-	__capability void *iov_base;
-#else
 	struct chericap	iov_base;
-#endif
 	size_t		iov_len;
 };
+#endif
 
 #ifdef CHERI_KERNEL
 struct msghdr_c {

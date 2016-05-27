@@ -24,8 +24,8 @@ struct sysent cheriabi_sysent[] = {
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },		/* 0 = syscall */
 	{ 1, (sy_call_t *)cheriabi_stub_sys_exit, AUE_EXIT, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 1 = exit */
 	{ 0, (sy_call_t *)cheriabi_stub_fork, AUE_FORK, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 2 = fork */
-	{ 3, (sy_call_t *)cheriabi_stub_read, AUE_READ, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 3 = read */
-	{ 3, (sy_call_t *)cheriabi_stub_write, AUE_WRITE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 4 = write */
+	{ 3, (sy_call_t *)cheriabi_read, AUE_READ, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 3 = cheriabi_read */
+	{ 3, (sy_call_t *)cheriabi_write, AUE_WRITE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 4 = cheriabi_write */
 	{ 3, (sy_call_t *)cheriabi_stub_open, AUE_OPEN_RWTC, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 5 = open */
 	{ 1, (sy_call_t *)cheriabi_stub_close, AUE_CLOSE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 6 = close */
 	{ 4, (sy_call_t *)cheriabi_stub_wait4, AUE_WAIT4, NULL, 0, 0, 0, SY_THR_STATIC },	/* 7 = wait4 */
@@ -496,8 +496,8 @@ struct sysent cheriabi_sysent[] = {
 	{ 7, (sy_call_t *)lkmressys, AUE_NULL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_ABSENT },		/* 472 = sctp_generic_sendmsg */
 	{ 7, (sy_call_t *)lkmressys, AUE_NULL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_ABSENT },		/* 473 = cheriabi_sctp_generic_sendmsg_iov */
 	{ 7, (sy_call_t *)lkmressys, AUE_NULL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_ABSENT },		/* 474 = cheriabi_sctp_generic_recvmsg */
-	{ 4, (sy_call_t *)cheriabi_stub_pread, AUE_PREAD, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 475 = pread */
-	{ 4, (sy_call_t *)cheriabi_stub_pwrite, AUE_PWRITE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 476 = pwrite */
+	{ 4, (sy_call_t *)cheriabi_pread, AUE_PREAD, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 475 = cheriabi_pread */
+	{ 4, (sy_call_t *)cheriabi_pwrite, AUE_PWRITE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 476 = cheriabi_pwrite */
 	{ 6, (sy_call_t *)cheriabi_mmap, AUE_MMAP, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 477 = cheriabi_mmap */
 	{ 3, (sy_call_t *)cheriabi_stub_lseek, AUE_LSEEK, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 478 = lseek */
 	{ 2, (sy_call_t *)cheriabi_stub_truncate, AUE_TRUNCATE, NULL, 0, 0, 0, SY_THR_STATIC },	/* 479 = truncate */
@@ -582,22 +582,6 @@ int
 cheriabi_stub_fork(struct thread *td, struct cheriabi_stub_fork_args *uap)
 {	struct fork_args legacy_uap;
 	return sys_fork(td, &legacy_uap);
-}
-int
-cheriabi_stub_read(struct thread *td, struct cheriabi_stub_read_args *uap)
-{	struct read_args legacy_uap;
-	legacy_uap.fd = uap->fd;
-	legacy_uap.buf = (void *) uap->buf;
-	legacy_uap.nbyte = uap->nbyte;
-	return sys_read(td, &legacy_uap);
-}
-int
-cheriabi_stub_write(struct thread *td, struct cheriabi_stub_write_args *uap)
-{	struct write_args legacy_uap;
-	legacy_uap.fd = uap->fd;
-	legacy_uap.buf = (const void *) uap->buf;
-	legacy_uap.nbyte = uap->nbyte;
-	return sys_write(td, &legacy_uap);
 }
 int
 cheriabi_stub_open(struct thread *td, struct cheriabi_stub_open_args *uap)
@@ -2224,24 +2208,6 @@ cheriabi_stub_rtprio_thread(struct thread *td, struct cheriabi_stub_rtprio_threa
 	legacy_uap.lwpid = uap->lwpid;
 	legacy_uap.rtp = (struct rtprio *) uap->rtp;
 	return sys_rtprio_thread(td, &legacy_uap);
-}
-int
-cheriabi_stub_pread(struct thread *td, struct cheriabi_stub_pread_args *uap)
-{	struct pread_args legacy_uap;
-	legacy_uap.fd = uap->fd;
-	legacy_uap.buf = (void *) uap->buf;
-	legacy_uap.nbyte = uap->nbyte;
-	legacy_uap.offset = uap->offset;
-	return sys_pread(td, &legacy_uap);
-}
-int
-cheriabi_stub_pwrite(struct thread *td, struct cheriabi_stub_pwrite_args *uap)
-{	struct pwrite_args legacy_uap;
-	legacy_uap.fd = uap->fd;
-	legacy_uap.buf = (const void *) uap->buf;
-	legacy_uap.nbyte = uap->nbyte;
-	legacy_uap.offset = uap->offset;
-	return sys_pwrite(td, &legacy_uap);
 }
 int
 cheriabi_stub_lseek(struct thread *td, struct cheriabi_stub_lseek_args *uap)

@@ -70,10 +70,11 @@
 1	AUE_EXIT	CHERI	{ void sys_exit(int rval); } exit \
 				    sys_exit_args void
 2	AUE_FORK	CHERI	{ int fork(void); }
-3	AUE_READ	CHERI	{ ssize_t read(int fd, \
-				    void *buf, \
+3	AUE_READ	STD	{ ssize_t cheriabi_read(int fd, \
+				    __capability void *buf, \
 				    size_t nbyte); }
-4	AUE_WRITE	CHERI	{ ssize_t write(int fd, const void *buf, \
+4	AUE_WRITE	STD	{ ssize_t cheriabi_write(int fd, \
+				    __capability const void *buf, \
 				    size_t nbyte); }
 5	AUE_OPEN_RWTC	CHERI	{ int open(char *path, int flags, \
 				    int mode); }
@@ -860,11 +861,11 @@
 				    __capability __socklen_t *fromlenaddr, \
 				    __capability struct sctp_sndrcvinfo *sinfo, \
 				    __capability int *msg_flags); }
-475	AUE_PREAD	CHERI	{ ssize_t pread(int fd, \
-				    void *buf,size_t nbyte, \
+475	AUE_PREAD	STD	{ ssize_t cheriabi_pread(int fd, \
+				    __capability void *buf,size_t nbyte, \
 				    off_t offset); }
-476	AUE_PWRITE	CHERI	{ ssize_t pwrite(int fd, \
-				    const void *buf, size_t nbyte, \
+476	AUE_PWRITE	STD	{ ssize_t cheriabi_pwrite(int fd, \
+				    __capability const void *buf, size_t nbyte, \
 				    off_t offset); }
 ; XXXAM: caddr_t can not be qualified with __capability
 ; 477	AUE_MMAP	STD { caddr_t cheriabi_mmap(caddr_t addr, \

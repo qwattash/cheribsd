@@ -582,6 +582,49 @@ cheriabi_kevent(struct thread *td, struct cheriabi_kevent_args *uap)
 	return (error);
 }
 
+#ifdef CHERI_KERNEL
+
+#ifdef CHERI_KERNEL
+#define CAP_ALIGN(ptr) ((uintptr_t)(ptr) & -CHERICAP_SIZE);
+#endif
+
+static int
+cheriabi_copyinuio_cap(__capability struct iovec_c *iovp, u_int iovcnt, struct uio_c **uiop)
+{
+	struct iovec_c *iov;
+	struct uio_c *uio;
+	u_int iovlen;
+	int error, i;
+
+	*uiop = NULL;
+	if (iovcnt > UIO_MAXIOV)
+		return (EINVAL);
+	iovlen = iovcnt * sizeof(struct iovec_c) + CHERICAP_SIZE;
+	uio = malloc(iovlen + sizeof(*uio), M_IOV, M_WAITOK);
+	iov = (struct iovec_c *)CAP_ALIGN(uio + 1);
+	error = copyincap((void *)iovp, iov, iovlen);
+	if (error) {
+		free(uio, M_IOV);
+		return (error);
+	}
+	uio->uio_iov = iov;
+	uio->uio_iovcnt = iovcnt;
+	uio->uio_segflg = UIO_USERSPACE;
+	uio->uio_offset = -1;
+	uio->uio_resid = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov->iov_len > INT_MAX - uio->uio_resid) {
+			free(uio, M_IOV);
+			return (EINVAL);
+		}
+		uio->uio_resid += iov->iov_len;
+		iov++;
+	}
+	*uiop = uio;
+	return (0);
+}
+#endif
+
 static int
 cheriabi_copyinuio(struct iovec_c *iovp, u_int iovcnt, struct uio **uiop)
 {
@@ -623,14 +666,103 @@ cheriabi_copyinuio(struct iovec_c *iovp, u_int iovcnt, struct uio **uiop)
 	return (0);
 }
 
+#ifdef CHERI_KERNEL
+
+int
+cheriabi_read(struct thread *td, struct cheriabi_read_args *uap)
+{
+	struct uio_c auio;
+	struct iovec_c aiov;
+	int error;
+
+	if (uap->nbyte > IOSIZE_MAX)
+		return (EINVAL);
+	aiov.iov_base = uap->buf;
+	aiov.iov_len = uap->nbyte;
+	auio.uio_iov = &aiov;
+	auio.uio_iovcnt = 1;
+	auio.uio_resid = uap->nbyte;
+	auio.uio_segflg = UIO_USERSPACE;
+	error = kern_readv(td, uap->fd, &auio);
+	return(error);
+}
+
+int
+cheriabi_pread(struct thread *td, struct cheriabi_pread_args *uap)
+{
+	struct uio_c auio;
+	struct iovec_c aiov;
+	int error;
+
+	if (uap->nbyte > IOSIZE_MAX)
+		return (EINVAL);
+	aiov.iov_base = uap->buf;
+	aiov.iov_len = uap->nbyte;
+	auio.uio_iov = &aiov;
+	auio.uio_iovcnt = 1;
+	auio.uio_resid = uap->nbyte;
+	auio.uio_segflg = UIO_USERSPACE;
+	error = kern_preadv(td, uap->fd, &auio, uap->offset);
+	return(error);
+}
+
+int
+cheriabi_write(struct thread *td, struct cheriabi_write_args *uap)
+{
+	struct uio_c auio;
+	struct iovec_c aiov;
+	int error;
+
+	if (uap->nbyte > IOSIZE_MAX)
+		return (EINVAL);
+	aiov.iov_base = (__capability void *)(uintptr_t)uap->buf;
+	aiov.iov_len = uap->nbyte;
+	auio.uio_iov = &aiov;
+	auio.uio_iovcnt = 1;
+	auio.uio_resid = uap->nbyte;
+	auio.uio_segflg = UIO_USERSPACE;
+	error = kern_writev(td, uap->fd, &auio);
+	return(error);
+}
+
+int
+cheriabi_pwrite(struct thread *td, struct cheriabi_pwrite_args *uap)
+{
+	struct uio_c auio;
+	struct iovec_c aiov;
+	int error;
+
+	if (uap->nbyte > IOSIZE_MAX)
+		return (EINVAL);
+	aiov.iov_base = (__capability void *)(uintptr_t)uap->buf;
+	aiov.iov_len = uap->nbyte;
+	auio.uio_iov = &aiov;
+	auio.uio_iovcnt = 1;
+	auio.uio_resid = uap->nbyte;
+	auio.uio_segflg = UIO_USERSPACE;
+	error = kern_pwritev(td, uap->fd, &auio, uap->offset);
+	return(error);
+}
+
+#endif
+
 int
 cheriabi_readv(struct thread *td, struct cheriabi_readv_args *uap)
 {
+#ifdef CHERI_KERNEL
+	struct uio_c *auio;
+#else
 	struct uio *auio;
+#endif
 	int error;
 
+#ifdef CHERI_KERNEL
+	error = cheriabi_copyinuio_cap(uap->iovp,
+				       uap->iovcnt, &auio);
+#else
 	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
 				   uap->iovcnt, &auio);
+#endif
 	if (error)
 		return (error);
 	error = kern_readv(td, uap->fd, auio);
@@ -641,11 +773,19 @@ cheriabi_readv(struct thread *td, struct cheriabi_readv_args *uap)
 int
 cheriabi_writev(struct thread *td, struct cheriabi_writev_args *uap)
 {
+#ifdef CHERI_KERNEL
+	struct uio_c *auio;
+#else
 	struct uio *auio;
+#endif
 	int error;
 
+#ifdef CHERI_KERNEL
+	error = cheriabi_copyinuio_cap(uap->iovp, uap->iovcnt, &auio);
+#else
 	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
 				   uap->iovcnt, &auio);
+#endif
 	if (error)
 		return (error);
 	error = kern_writev(td, uap->fd, auio);
@@ -656,11 +796,20 @@ cheriabi_writev(struct thread *td, struct cheriabi_writev_args *uap)
 int
 cheriabi_preadv(struct thread *td, struct cheriabi_preadv_args *uap)
 {
+#ifdef CHERI_KERNEL
+	struct uio_c *auio;
+#else
 	struct uio *auio;
+#endif
 	int error;
 
+#ifdef CHERI_KERNEL
+	error = cheriabi_copyinuio_cap(uap->iovp,
+				       uap->iovcnt, &auio);
+#else
 	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
 				   uap->iovcnt, &auio);
+#endif
 	if (error)
 		return (error);
 	error = kern_preadv(td, uap->fd, auio, uap->offset);
@@ -671,11 +820,19 @@ cheriabi_preadv(struct thread *td, struct cheriabi_preadv_args *uap)
 int
 cheriabi_pwritev(struct thread *td, struct cheriabi_pwritev_args *uap)
 {
+#ifdef CHERI_KERNEL
+	struct uio_c *auio;
+#else
 	struct uio *auio;
+#endif
 	int error;
 
+#ifdef CHERI_KERNEL
+	error = cheriabi_copyinuio_cap(uap->iovp, uap->iovcnt, &auio);
+#else
 	error = cheriabi_copyinuio((struct iovec_c *)uap->iovp,
 				   uap->iovcnt, &auio);
+#endif
 	if (error)
 		return (error);
 	error = kern_pwritev(td, uap->fd, auio, uap->offset);

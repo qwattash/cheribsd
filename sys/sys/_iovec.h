@@ -45,4 +45,11 @@ struct iovec {
 	size_t	 iov_len;	/* Length. */
 };
 
+#ifdef CHERI_KERNEL
+struct iovec_c {
+	__capability void	*iov_base;	/* Base address. */
+	size_t	 iov_len;	/* Length. */
+};
+#endif
+
 #endif /* !_SYS__IOVEC_H_ */
