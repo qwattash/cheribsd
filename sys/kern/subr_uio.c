@@ -72,6 +72,10 @@ SYSCTL_INT(_kern, KERN_IOV_MAX, iov_max, CTLFLAG_RD, SYSCTL_NULL_INT_PTR, UIO_MA
 	"Maximum number of elements in an I/O vector; sysconf(_SC_IOV_MAX)");
 
 static int uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault);
+#ifdef CHERI_KERNEL
+static int uiomove_faultflag_cap(__capability void *cp, int n,
+				 struct uio_c *uio, int nofault);
+#endif
 
 /*
  * XXXAM move to machine utilities
@@ -657,6 +661,96 @@ casuword(volatile u_long *addr, u_long old, u_long new)
 #endif /* NO_FUEWORD */
 
 #ifdef CHERI_KERNEL
+
+/*
+ * uiomove for capability-enabled uio
+ */
+int
+uiomove_cap(__capability void *cp, int n, struct uio_c *uio)
+{
+	return (uiomove_faultflag_cap(cp, n, uio, 0));
+}
+
+int
+uiomove_nofault_cap(__capability void *cp, int n, struct uio_c *uio)
+{
+
+	return (uiomove_faultflag_cap(cp, n, uio, 1));
+}
+
+static int
+uiomove_faultflag_cap(__capability void *cp, int n, struct uio_c *uio, int nofault)
+{
+	struct thread *td;
+	struct iovec_c *iov;
+	size_t cnt;
+	int error, newflags, save;
+	
+	td = curthread;
+	error = 0;
+
+	KASSERT(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE,
+	    ("uiomove: mode"));
+	KASSERT(uio->uio_segflg != UIO_USERSPACE || uio->uio_td == td,
+	    ("uiomove proc"));
+	if (!nofault)
+		WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, NULL,
+		    "Calling uiomove()");
+
+	/* XXX does it make a sense to set TDP_DEADLKTREAT for UIO_SYSSPACE ? */
+	newflags = TDP_DEADLKTREAT;
+	if (uio->uio_segflg == UIO_USERSPACE && nofault) {
+		/*
+		 * Fail if a non-spurious page fault occurs.
+		 */
+		newflags |= TDP_NOFAULTING | TDP_RESETSPUR;
+	}
+	save = curthread_pflags_set(newflags);
+
+	while (n > 0 && uio->uio_resid) {
+		iov = uio->uio_iov;
+		cnt = iov->iov_len;
+		if (cnt == 0) {
+			uio->uio_iov++;
+			uio->uio_iovcnt--;
+			continue;
+		}
+		if (cnt > n)
+			cnt = n;
+
+		switch (uio->uio_segflg) {
+
+		case UIO_USERSPACE:
+			maybe_yield();
+			if (uio->uio_rw == UIO_READ)
+				error = copyout_cap(cp, iov->iov_base, cnt);
+			else
+				error = copyin_cap(iov->iov_base, cp, cnt);
+			if (error)
+				goto out;
+			break;
+
+		case UIO_SYSSPACE:
+			if (uio->uio_rw == UIO_READ)
+				bcopy_cap(cp, iov->iov_base, cnt);
+			else
+				bcopy_cap(iov->iov_base, cp, cnt);
+			break;
+		case UIO_NOCOPY:
+			break;
+		}
+		iov->iov_base = (__capability char *)iov->iov_base + cnt;
+		iov->iov_len -= cnt;
+		uio->uio_resid -= cnt;
+		uio->uio_offset += cnt;
+		cp = (__capability char *)cp + cnt;
+		n -= cnt;
+	}
+out:
+	curthread_pflags_restore(save);
+	return (error);
+}
+
 /*
  * Convert cheri uio to non-capability uio.
  */
@@ -695,21 +789,22 @@ int
 uio2uioc(struct uio *uio, struct uio_c **uiop)
 {
 	struct uio_c *uio_c;
+	struct iovec_c *iov_c;
 	u_int iovlen;
 	int i;
 
 	*uiop = NULL;
 
-	iovlen = uio->uio_iovcnt * sizeof (struct iovec_c);
+	iovlen = uio->uio_iovcnt * sizeof(struct iovec_c) + CHERICAP_SIZE;
 	uio_c = malloc(iovlen + sizeof *uio, M_IOV, M_WAITOK);
-	uio_c->uio_iov = (struct iovec_c *)(uio_c + 1);
+	iov_c = (struct iovec_c *)CAP_ALIGN(uio_c + 1);
 	for (i = 0; i < uio->uio_iovcnt; i++) {
-		uio_c->uio_iov[i].iov_base =
-			cheri_ptr(uio->uio_iov[i].iov_base,
-				  uio->uio_iov[i].iov_len);
-		uio_c->uio_iov[i].iov_len =
-			uio->uio_iov[i].iov_len;
+		iov_c[i].iov_base = (__capability void *)uio->uio_iov[i].iov_base;
+		/* iov_c[i].iov_base = cheri_ptr(uio->uio_iov[i].iov_base, */
+		/* 			      uio->uio_iov[i].iov_len); */
+		iov_c[i].iov_len = uio->uio_iov[i].iov_len;
 	}
+	uio_c->uio_iov = iov_c;
 	uio_c->uio_iovcnt = uio->uio_iovcnt;
 	uio_c->uio_offset = uio->uio_offset;
 	uio_c->uio_resid = uio->uio_resid;

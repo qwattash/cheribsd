@@ -64,8 +64,13 @@ __FBSDID("$FreeBSD$");
 
 #include <security/mac/mac_framework.h>
 
+#ifdef CHERI_KERNEL
+static fo_rdwr_t soo_read_cap;
+static fo_rdwr_t soo_write_cap;
+#else
 static fo_rdwr_t soo_read;
 static fo_rdwr_t soo_write;
+#endif
 static fo_ioctl_t soo_ioctl;
 static fo_poll_t soo_poll;
 extern fo_kqfilter_t soo_kqfilter;
@@ -74,8 +79,13 @@ static fo_close_t soo_close;
 static fo_fill_kinfo_t soo_fill_kinfo;
 
 struct fileops	socketops = {
+#ifdef CHERI_KERNEL
+	.fo_read = soo_read_cap,
+	.fo_write = soo_write_cap,
+#else
 	.fo_read = soo_read,
 	.fo_write = soo_write,
+#endif
 	.fo_truncate = invfo_truncate,
 	.fo_ioctl = soo_ioctl,
 	.fo_poll = soo_poll,
@@ -125,6 +135,11 @@ soo_write(struct file *fp, struct uio *uio, struct ucred *active_cred,
 	}
 	return (error);
 }
+
+#ifdef CHERI_KERNEL
+FO_CAP_WRAPPER(soo_read);
+FO_CAP_WRAPPER(soo_write);
+#endif
 
 static int
 soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,

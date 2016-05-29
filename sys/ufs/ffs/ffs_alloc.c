@@ -2752,6 +2752,11 @@ SYSCTL_INT(_debug, OID_AUTO, fsckcmds, CTLFLAG_RW, &fsckcmds, 0, "");
 static int buffered_write(struct file *, struct uio *, struct ucred *,
 	int, struct thread *);
 
+#ifdef CHERI_KERNEL
+/* define buffered_write_cap as a wrapper for buffered_write */
+FO_CAP_WRAPPER(buffered_write);
+#endif
+
 static int
 sysctl_ffs_fsck(SYSCTL_HANDLER_ARGS)
 {
@@ -3096,7 +3101,11 @@ sysctl_ffs_fsck(SYSCTL_HANDLER_ARGS)
 			origops = vfp->f_ops;
 			bcopy((void *)origops, (void *)&bufferedops,
 			    sizeof(bufferedops));
+#ifdef CHERI_KERNEL
+			bufferedops.fo_write = buffered_write_cap;
+#else
 			bufferedops.fo_write = buffered_write;
+#endif
 		}
 		if (cmd.size == 1)
 			atomic_store_rel_ptr((volatile uintptr_t *)&vfp->f_ops,

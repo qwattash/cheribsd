@@ -90,6 +90,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/pmckern.h>
 #endif
 
+#ifdef CHERI_KERNEL
+#include <machine/cheric.h>
+#endif
+
 static fo_rdwr_t	vn_read;
 static fo_rdwr_t	vn_write;
 static fo_rdwr_t	vn_io_fault;
@@ -135,7 +139,13 @@ SYSCTL_ULONG(_debug, OID_AUTO, vn_io_faults, CTLFLAG_RD,
  * be used.
  */
 static bool
-do_vn_io_fault(struct vnode *vp, struct uio *uio)
+do_vn_io_fault(vp, uio)
+     struct vnode *vp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
 {
 	struct mount *mp;
 
@@ -159,6 +169,7 @@ struct vn_io_fault_args {
 		struct fop_args_tag {
 			struct file *fp;
 			fo_rdwr_t *doio;
+			/* int (*doio)(struct file *, struct uio *, struct ucred *, int, struct thread *); */
 		} fop_args;
 		struct vop_args_tag {
 			struct vnode *vp;
@@ -166,8 +177,13 @@ struct vn_io_fault_args {
 	} args;
 };
 
+#ifdef CHERI_KERNEL
+static int vn_io_fault1(struct vnode *vp, struct uio_c *uio,
+    struct vn_io_fault_args *args, struct thread *td);
+#else
 static int vn_io_fault1(struct vnode *vp, struct uio *uio,
     struct vn_io_fault_args *args, struct thread *td);
+#endif
 
 int
 vn_open(ndp, flagp, cmode, fp)
@@ -457,7 +473,13 @@ vn_close(vp, flags, file_cred, td)
  * Heuristic to detect sequential operation.
  */
 static int
-sequential_heuristic(struct uio *uio, struct file *fp)
+sequential_heuristic(uio, fp)
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct file *fp;
 {
 
 	ASSERT_VOP_LOCKED(fp->f_vnode, __func__);
@@ -504,8 +526,13 @@ vn_rdwr(enum uio_rw rw, struct vnode *vp, void *base, int len, off_t offset,
     enum uio_seg segflg, int ioflg, struct ucred *active_cred,
     struct ucred *file_cred, ssize_t *aresid, struct thread *td)
 {
+#ifdef CHERI_KERNEL
+	struct uio_c auio;
+	struct iovec_c aiov;
+#else
 	struct uio auio;
 	struct iovec aiov;
+#endif
 	struct mount *mp;
 	struct ucred *cred;
 	void *rl_cookie;
@@ -514,7 +541,11 @@ vn_rdwr(enum uio_rw rw, struct vnode *vp, void *base, int len, off_t offset,
 
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
+#ifdef CHERI_KERNEL
+	aiov.iov_base = cheri_ptr(base, len);
+#else
 	aiov.iov_base = base;
+#endif
 	aiov.iov_len = len;
 	auio.uio_resid = len;
 	auio.uio_offset = offset;
@@ -567,6 +598,7 @@ vn_rdwr(enum uio_rw rw, struct vnode *vp, void *base, int len, off_t offset,
 			cred = file_cred;
 		else
 			cred = active_cred;
+		
 		if (do_vn_io_fault(vp, &auio)) {
 			args.kind = VN_IO_FAULT_VOP;
 			args.cred = cred;
@@ -574,9 +606,13 @@ vn_rdwr(enum uio_rw rw, struct vnode *vp, void *base, int len, off_t offset,
 			args.args.vop_args.vp = vp;
 			error = vn_io_fault1(vp, &auio, &args, td);
 		} else if (rw == UIO_READ) {
-			error = VOP_READ(vp, &auio, ioflg, cred);
+			__UIOC2UIO_START(&auio, tmp_uio);
+			error = VOP_READ(vp, tmp_uio, ioflg, cred);
+			__UIOC2UIO_END(&auio, tmp_uio);
 		} else /* if (rw == UIO_WRITE) */ {
-			error = VOP_WRITE(vp, &auio, ioflg, cred);
+			__UIOC2UIO_START(&auio, tmp_uio);
+			error = VOP_WRITE(vp, tmp_uio, ioflg, cred);
+			__UIOC2UIO_END(&auio, tmp_uio);
 		}
 	}
 	if (aresid)
@@ -720,6 +756,23 @@ foffset_unlock(struct file *fp, off_t val, int flags)
 	mtx_unlock(mtxp);
 }
 
+
+static void
+foffset_lock_uio_cap(struct file *fp, struct uio_c *uio, int flags)
+{
+	__UIOC2UIO_START(uio, tmp_uio);
+	foffset_lock_uio(fp, tmp_uio, flags);
+	__UIOC2UIO_END(uio, tmp_uio);
+}
+
+static void
+foffset_unlock_uio_cap(struct file *fp, struct uio_c *uio, int flags)
+{
+	__UIOC2UIO_START(uio, tmp_uio);
+	foffset_unlock_uio(fp, tmp_uio, flags);
+	__UIOC2UIO_END(uio, tmp_uio);
+}
+
 void
 foffset_lock_uio(struct file *fp, struct uio *uio, int flags)
 {
@@ -737,7 +790,13 @@ foffset_unlock_uio(struct file *fp, struct uio *uio, int flags)
 }
 
 static int
-get_advice(struct file *fp, struct uio *uio)
+get_advice(fp, uio)
+     struct file *fp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
 {
 	struct mtx *mtxp;
 	int ret;
@@ -762,7 +821,11 @@ get_advice(struct file *fp, struct uio *uio)
 static int
 vn_read(fp, uio, active_cred, flags, td)
 	struct file *fp;
+#ifdef CHERI_KERNEL
+	struct uio_c *uio;
+#else
 	struct uio *uio;
+#endif
 	struct ucred *active_cred;
 	int flags;
 	struct thread *td;
@@ -800,7 +863,11 @@ vn_read(fp, uio, active_cred, flags, td)
 	error = mac_vnode_check_read(active_cred, fp->f_cred, vp);
 	if (error == 0)
 #endif
-		error = VOP_READ(vp, uio, ioflag, fp->f_cred);
+		{
+			__UIOC2UIO_START(uio, tmp_uio);
+			error = VOP_READ(vp, tmp_uio, ioflag, fp->f_cred);
+			__UIOC2UIO_END(uio, tmp_uio);
+		}
 	fp->f_nextoff = uio->uio_offset;
 	VOP_UNLOCK(vp, 0);
 	if (error == 0 && advice == POSIX_FADV_NOREUSE &&
@@ -821,7 +888,11 @@ vn_read(fp, uio, active_cred, flags, td)
 static int
 vn_write(fp, uio, active_cred, flags, td)
 	struct file *fp;
+#ifdef CHERI_KERNEL
+	struct uio_c *uio;
+#else
 	struct uio *uio;
+#endif
 	struct ucred *active_cred;
 	int flags;
 	struct thread *td;
@@ -879,7 +950,11 @@ vn_write(fp, uio, active_cred, flags, td)
 	error = mac_vnode_check_write(active_cred, fp->f_cred, vp);
 	if (error == 0)
 #endif
-		error = VOP_WRITE(vp, uio, ioflag, fp->f_cred);
+		{
+			__UIOC2UIO_START(uio, tmp_uio);
+			error = VOP_WRITE(vp, tmp_uio, ioflag, fp->f_cred);
+			__UIOC2UIO_END(uio, tmp_uio);
+		}
 	fp->f_nextoff = uio->uio_offset;
 	VOP_UNLOCK(vp, 0);
 	if (vp->v_type != VCHR)
@@ -935,21 +1010,35 @@ unlock:
  * Decode vn_io_fault_args and perform the corresponding i/o.
  */
 static int
-vn_io_fault_doio(struct vn_io_fault_args *args, struct uio *uio,
-    struct thread *td)
+vn_io_fault_doio(args, uio, td)
+     struct vn_io_fault_args *args;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct thread *td;
 {
-
+	struct uio *tmp_uio;
+	int err;
+	
 	switch (args->kind) {
 	case VN_IO_FAULT_FOP:
 		return ((args->args.fop_args.doio)(args->args.fop_args.fp,
-		    uio, args->cred, args->flags, td));
+	                uio, args->cred, args->flags, td));
 	case VN_IO_FAULT_VOP:
+		uioc2uio(uio, &tmp_uio);
 		if (uio->uio_rw == UIO_READ) {
-			return (VOP_READ(args->args.vop_args.vp, uio,
+			err = (VOP_READ(args->args.vop_args.vp, tmp_uio,
 			    args->flags, args->cred));
+			__UIOC2UIO_END(uio, tmp_uio);
+			return err;
+			
 		} else if (uio->uio_rw == UIO_WRITE) {
-			return (VOP_WRITE(args->args.vop_args.vp, uio,
+			err = (VOP_WRITE(args->args.vop_args.vp, tmp_uio,
 			    args->flags, args->cred));
+			__UIOC2UIO_END(uio, tmp_uio);
+			return err;
 		}
 		break;
 	}
@@ -958,21 +1047,44 @@ vn_io_fault_doio(struct vn_io_fault_args *args, struct uio *uio,
 }
 
 static int
+#ifdef CHERI_KERNEL
+vn_io_fault_touch(__capability char *base, const struct uio_c *uio)
+#else
 vn_io_fault_touch(char *base, const struct uio *uio)
+#endif
 {
 	int r;
-
+      	/*
+	 * XXXAM: what if the byte at *base is exactly -1? EFAULT 
+	 * even if not true?
+	 */
+#ifdef CHERI_KERNEL
+	r = fubyte_cap(base);
+	if (r == -1 || (uio->uio_rw == UIO_READ && subyte_cap(base, r) == -1))
+		return (EFAULT);
+#else
 	r = fubyte(base);
 	if (r == -1 || (uio->uio_rw == UIO_READ && subyte(base, r) == -1))
 		return (EFAULT);
+#endif
 	return (0);
 }
 
 static int
-vn_io_fault_prefault_user(const struct uio *uio)
+vn_io_fault_prefault_user(uio)
+#ifdef CHERI_KERNEL
+     const struct uio_c *uio;
+#else
+     const struct uio *uio;
+#endif
 {
+#ifdef CHERI_KERNEL
+	__capability char *base;
+	const struct iovec_c *iov;
+#else
 	char *base;
 	const struct iovec *iov;
+#endif
 	size_t len;
 	ssize_t resid;
 	int error, i;
@@ -1018,19 +1130,31 @@ vn_io_fault_prefault_user(const struct uio *uio)
  * mode buffer accesses.
  */
 static int
-vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
-    struct thread *td)
+vn_io_fault1(vp, uio, args, td)
+     struct vnode *vp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct vn_io_fault_args *args;     
+     struct thread *td;
 {
 	vm_page_t ma[io_hold_cnt + 2];
+#ifdef CHERI_KERNEL
+	struct uio_c *uio_clone, short_uio;
+	struct iovec_c short_iovec[1];
+#else
 	struct uio *uio_clone, short_uio;
 	struct iovec short_iovec[1];
+#endif
 	vm_page_t *prev_td_ma;
 	vm_prot_t prot;
 	vm_offset_t addr, end;
 	size_t len, resid;
 	ssize_t adv;
 	int error, cnt, save, saveheld, prev_td_ma_cnt;
-
+	
 	if (vn_io_fault_prefault) {
 		error = vn_io_fault_prefault_user(uio);
 		if (error != 0)
@@ -1048,7 +1172,11 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 	 * Cache a copy of the original uio, which is advanced to the redo
 	 * point using UIO_NOCOPY below.
 	 */
+#ifdef CHERI_KERNEL
+	uio_clone = cloneuio_cap(uio);
+#else
 	uio_clone = cloneuio(uio);
+#endif
 	resid = uio->uio_resid;
 
 	short_uio.uio_segflg = UIO_USERSPACE;
@@ -1062,7 +1190,11 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 
 	atomic_add_long(&vn_io_faults_cnt, 1);
 	uio_clone->uio_segflg = UIO_NOCOPY;
-	uiomove(NULL, resid - uio->uio_resid, uio_clone);
+#ifdef CHERI_KERNEL
+	uiomove_cap(NULL, resid - uio->uio_resid, uio);
+#else
+	uiomove(NULL, resid - uio->uio_resid, uio);
+#endif
 	uio_clone->uio_segflg = uio->uio_segflg;
 
 	saveheld = curthread_pflags_set(TDP_UIOHELD);
@@ -1099,7 +1231,11 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 			break;
 		}
 		short_uio.uio_iov = &short_iovec[0];
+#ifdef CHERI_KERNEL
+		short_iovec[0].iov_base = cheri_ptr((void *)addr, len);
+#else
 		short_iovec[0].iov_base = (void *)addr;
+#endif
 		short_uio.uio_iovcnt = 1;
 		short_uio.uio_resid = short_iovec[0].iov_len = len;
 		short_uio.uio_offset = uio_clone->uio_offset;
@@ -1110,8 +1246,13 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 		vm_page_unhold_pages(ma, cnt);
 		adv = len - short_uio.uio_resid;
 
+#ifdef CHERI_KERNEL
+		uio_clone->uio_iov->iov_base =
+		    (__capability char *)uio_clone->uio_iov->iov_base + adv;
+#else
 		uio_clone->uio_iov->iov_base =
 		    (char *)uio_clone->uio_iov->iov_base + adv;
+#endif
 		uio_clone->uio_iov->iov_len -= adv;
 		uio_clone->uio_resid -= adv;
 		uio_clone->uio_offset += adv;
@@ -1128,12 +1269,20 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 out:
 	vm_fault_enable_pagefaults(save);
 	free(uio_clone, M_IOV);
-	return (error);
+	return (error);	
 }
 
 static int
-vn_io_fault(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
+vn_io_fault(fp, uio, active_cred, flags, td)
+     struct file *fp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct ucred *active_cred;
+     int flags;
+     struct thread *td;
 {
 	fo_rdwr_t *doio;
 	struct vnode *vp;
@@ -1143,7 +1292,11 @@ vn_io_fault(struct file *fp, struct uio *uio, struct ucred *active_cred,
 
 	doio = uio->uio_rw == UIO_READ ? vn_read : vn_write;
 	vp = fp->f_vnode;
+#ifdef CHERI_KERNEL
+	foffset_lock_uio_cap(fp, uio, flags);
+#else
 	foffset_lock_uio(fp, uio, flags);
+#endif
 	if (do_vn_io_fault(vp, uio)) {
 		args.kind = VN_IO_FAULT_FOP;
 		args.args.fop_args.fp = fp;
@@ -1166,7 +1319,11 @@ vn_io_fault(struct file *fp, struct uio *uio, struct ucred *active_cred,
 	} else {
 		error = doio(fp, uio, active_cred, flags | FOF_OFFSET, td);
 	}
+#ifdef CHERI_KERNEL
+	foffset_unlock_uio_cap(fp, uio, flags);
+#else
 	foffset_unlock_uio(fp, uio, flags);
+#endif
 	return (error);
 }
 
@@ -1182,6 +1339,7 @@ vn_io_fault(struct file *fp, struct uio *uio, struct ucred *active_cred,
  * Filesystems specified MNTK_NO_IOPF shall use vn_io_fault_uiomove()
  * instead of plain uiomove().
  */
+ //XXXAM todo
 int
 vn_io_fault_uiomove(char *data, int xfersize, struct uio *uio)
 {
@@ -1238,9 +1396,10 @@ vn_io_fault_uiomove(char *data, int xfersize, struct uio *uio)
 	return (error);
 }
 
+// XXXAM todo
 int
 vn_io_fault_pgmove(vm_page_t ma[], vm_offset_t offset, int xfersize,
-    struct uio *uio)
+		   struct uio *uio)
 {
 	struct thread *td;
 	vm_offset_t iov_base;
@@ -1280,6 +1439,7 @@ vn_io_fault_pgmove(vm_page_t ma[], vm_offset_t offset, int xfersize,
 /*
  * File table truncate routine.
  */
+ //XXXAM todo
 static int
 vn_truncate(struct file *fp, off_t length, struct ucred *active_cred,
     struct thread *td)
@@ -1922,6 +2082,7 @@ vn_kqfilter(struct file *fp, struct knote *kn)
  * Both calls pass in a NULL credential, authorizing as "kernel" access.
  * Set IO_NODELOCKED in ioflg if the vnode is already locked.
  */
+ //XXXAM todo?
 int
 vn_extattr_get(struct vnode *vp, int ioflg, int attrnamespace,
     const char *attrname, int *buflen, char *buf, struct thread *td)
@@ -1963,6 +2124,7 @@ vn_extattr_get(struct vnode *vp, int ioflg, int attrnamespace,
 /*
  * XXX failure mode if partially written?
  */
+ //XXXAM todo?
 int
 vn_extattr_set(struct vnode *vp, int ioflg, int attrnamespace,
     const char *attrname, int buflen, char *buf, struct thread *td)

@@ -326,6 +326,38 @@ _C_LABEL(x):
 #define	CALLFRAME_C17	(CALLFRAME_SIZ - 2 * _MIPS_SZCAP / 8)
 #endif /* defined(__CHERI_PURE_CAPABILITY__) */
 
+#ifdef CHERI_KERNEL
+/*
+ * Helpers that compute the frame size given the number of extra
+ * integer and capability registers to be saved
+ * generic_callframe {
+ *      std_callframe        frame;
+ *      uint64_t             int_vars[push_int];
+ *      char                 pad[to_cap_align];
+ *      __capability void   *cap_vars[push_cap];
+ *  };
+ */
+#define CHERI_FRAME_ALIGN(push_int) \
+	((CALLFRAME_SIZ + push_int + CHERICAP_SIZE / 2) / CHERICAP_SIZE)
+#define CHERI_FRAME_SIZ(push_int, push_cap) \
+	((CHERI_FRAME_ALIGN(push_int) + push_cap) * CHERICAP_SIZE)
+#define CHERI_FRAME_EXTRA(push_int, push_cap) \
+	(CHERI_FRAME_SIZ(push_int, push_cap) - CALLFRAME_SIZ)
+#define CHERI_FRAME_REG(push_int, push_cap, callframe_r) \
+	(CHERI_FRAME_EXTRA(push_int, push_cap) + callframe_r)
+#define CHERI_FRAME_RA(push_int, push_cap) \
+	CHERI_FRAME_REG(push_int, push_cap, CALLFRAME_RA)
+#define CHERI_FRAME_GP(push_int, push_cap) \
+	CHERI_FRAME_REG(push_int, push_cap, CALLFRAME_GP)
+#define CHERI_FRAME_FP(push_int, push_cap) \
+	CHERI_FRAME_REG(push_int, push_cap, CALLFRAME_FP)
+#define CHERI_FRAME_S0(push_int, push_cap) \
+	CHERI_FRAME_REG(push_int, push_cap, CALLFRAME_S0)
+#define CHERI_FRAME_ILOCAL(push_int, push_cap, idx) \
+	(CHERI_FRAME_EXTRA(push_int, push_cap) - SZREG * idx)
+#define CHERI_FRAME_CLOCAL(push_int, push_cap, idx) idx * CHERICAP_SIZE
+#endif /* CHERI_KERNEL */
+
 /*
  *   Endian-independent assembly-code aliases for unaligned memory accesses.
  */

@@ -130,6 +130,10 @@ struct vop_vector ffs_vnodeops1 = {
 	.vop_reallocblks =	ffs_reallocblks,
 	.vop_write =		ffs_write,
 	.vop_vptofh =		ffs_vptofh,
+#ifdef CHERI_KERNEL
+	/* .vop_read_cap =         ffs_read_cap, */
+	/* .vop_write_cap =        ffs_write_cap, */
+#endif
 };
 
 struct vop_vector ffs_fifoops1 = {

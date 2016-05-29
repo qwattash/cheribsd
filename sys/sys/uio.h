@@ -80,6 +80,40 @@ struct uio_c {
 	enum	uio_rw uio_rw;		/* operation */
 	struct	thread *uio_td;		/* owner */
 };
+
+#define __UIOC2UIO_START(uiop, tmp_uio)					\
+		struct uio *tmp_uio;					\
+		uioc2uio(uiop, &tmp_uio);
+#define __UIOC2UIO_END(uiop, tmp_uio) do {				\
+		(uiop)->uio_iovcnt = tmp_uio->uio_iovcnt;		\
+		(uiop)->uio_offset = tmp_uio->uio_offset;		\
+		(uiop)->uio_resid = tmp_uio->uio_resid;			\
+		(uiop)->uio_segflg = tmp_uio->uio_segflg;		\
+		(uiop)->uio_rw = tmp_uio->uio_rw;			\
+		(uiop)->uio_td = tmp_uio->uio_td;			\
+		free(tmp_uio, M_IOV);					\
+	} while(0)
+
+#define __UIO2UIOC_START(uiop, tmp_uio)					\
+		struct uio_c *tmp_uio;					\
+		uio2uioc(uiop, &tmp_uio);
+#define __UIO2UIOC_END(uiop, tmp_uio) do {				\
+		(uiop)->uio_iovcnt = tmp_uio->uio_iovcnt;		\
+		(uiop)->uio_offset = tmp_uio->uio_offset;		\
+		(uiop)->uio_resid = tmp_uio->uio_resid;			\
+		(uiop)->uio_segflg = tmp_uio->uio_segflg;		\
+		(uiop)->uio_rw = tmp_uio->uio_rw;			\
+		(uiop)->uio_td = tmp_uio->uio_td;			\
+		free(tmp_uio, M_IOV);					\
+	} while(0)
+
+/*
+ * uio type for cheri-enabled uio data structures
+ * this is to be used to abstract the capability migration in the kernel
+ */
+typedef struct uio_c uio_cap_t;
+#else
+typedef struct uio uio_cap_t;
 #endif
 
 /*
@@ -107,13 +141,6 @@ int	copyiniov(const struct iovec *iovp, u_int iovcnt, struct iovec **iov,
 int	copyinstrfrom(const void * __restrict src, void * __restrict dst,
 	    size_t len, size_t * __restrict copied, int seg);
 int	copyinuio(const struct iovec *iovp, u_int iovcnt, struct uio **uiop);
-#ifdef CHERI_KERNEL
-int     copyinuio_cap(const struct iovec *iovp, u_int iovcnt,
-		      struct uio_c **uiop);
-int     uioc2uio(struct uio_c *uio_c, struct uio **uiop);
-int     uio2uioc(struct uio *uio, struct uio_c **uiop);
-struct uio_c *cloneuio_cap(struct uio_c *uiop);
-#endif
 int	copyout_map(struct thread *td, vm_offset_t *addr, size_t sz);
 int	copyout_unmap(struct thread *td, vm_offset_t addr, size_t sz);
 int	physcopyin(void *src, vm_paddr_t dst, size_t len);
@@ -128,6 +155,15 @@ int	uiomove_fromphys(struct vm_page *ma[], vm_offset_t offset, int n,
 	    struct uio *uio);
 int	uiomove_nofault(void *cp, int n, struct uio *uio);
 int	uiomove_object(struct vm_object *obj, off_t obj_size, struct uio *uio);
+#ifdef CHERI_KERNEL
+int     uiomove_cap(__capability void *cp, int n, struct uio_c *uio);
+int     uiomove_nofault_cap(__capability void *cp, int n, struct uio_c *uio);
+int     copyinuio_cap(const struct iovec *iovp, u_int iovcnt,
+		      struct uio_c **uiop);
+struct uio_c *cloneuio_cap(struct uio_c *uiop);
+int     uioc2uio(struct uio_c *uio_c, struct uio **uiop);
+int     uio2uioc(struct uio *uio, struct uio_c **uiop);
+#endif
 
 #else /* !_KERNEL */
 

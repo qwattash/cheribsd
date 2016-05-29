@@ -1246,13 +1246,22 @@ devfs_read_f(struct file *fp, struct uio *uio, struct ucred *cred,
 	ssize_t resid;
 	struct cdevsw *dsw;
 	struct file *fpop;
+#ifdef CHERI_KERNEL
+	struct uio_c *tmp_uioc;
+#endif
 
 	if (uio->uio_resid > DEVFS_IOSIZE_MAX)
 		return (EINVAL);
 	fpop = td->td_fpop;
 	error = devfs_fp_check(fp, &dev, &dsw, &ref);
 	if (error != 0) {
+#ifdef CHERI_KERNEL
+		uio2uioc(uio, &tmp_uioc);
+		error = vnops.fo_read(fp, tmp_uioc, cred, flags, td);
+		free(tmp_uioc, M_IOV);
+#else
 		error = vnops.fo_read(fp, uio, cred, flags, td);
+#endif
 		return (error);
 	}
 	resid = uio->uio_resid;
@@ -1730,13 +1739,22 @@ devfs_write_f(struct file *fp, struct uio *uio, struct ucred *cred,
 	ssize_t resid;
 	struct cdevsw *dsw;
 	struct file *fpop;
+#ifdef CHERI_KERNEL
+	struct uio_c *tmp_uioc;
+#endif
 
 	if (uio->uio_resid > DEVFS_IOSIZE_MAX)
 		return (EINVAL);
 	fpop = td->td_fpop;
 	error = devfs_fp_check(fp, &dev, &dsw, &ref);
 	if (error != 0) {
+#ifdef CHERI_KERNEL
+		uio2uioc(uio, &tmp_uioc);
+		error = vnops.fo_write(fp, tmp_uioc, cred, flags, td);
+		free(tmp_uioc, M_IOV);
+#else
 		error = vnops.fo_write(fp, uio, cred, flags, td);
+#endif
 		return (error);
 	}
 	KASSERT(uio->uio_td == td, ("uio_td %p is not td %p", uio->uio_td, td));
@@ -1837,9 +1855,19 @@ dev2udev(struct cdev *x)
 	return (cdev2priv(x)->cdp_inode);
 }
 
+#ifdef CHERI_KERNEL
+FO_CAP_WRAPPER(devfs_read_f);
+FO_CAP_WRAPPER(devfs_write_f);
+#endif
+
 static struct fileops devfs_ops_f = {
+#ifdef CHERI_KERNEL
+	.fo_read =	devfs_read_f_cap,
+	.fo_write =	devfs_write_f_cap,
+#else
 	.fo_read =	devfs_read_f,
 	.fo_write =	devfs_write_f,
+#endif
 	.fo_truncate =	devfs_truncate_f,
 	.fo_ioctl =	devfs_ioctl_f,
 	.fo_poll =	devfs_poll_f,

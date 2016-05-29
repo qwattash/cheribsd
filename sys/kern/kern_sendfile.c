@@ -554,6 +554,9 @@ vn_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
 	struct vattr va;
 	off_t off, sbytes, rem, obj_size;
 	int error, softerr, bsize, hdrlen;
+#ifdef CHERI_KERNEL
+	struct uio_c *tmp_uio;
+#endif
 
 	obj = NULL;
 	so = NULL;
@@ -896,7 +899,13 @@ retry_space:
 	 */
 	if (trl_uio != NULL) {
 		sbunlock(&so->so_snd);
+#ifdef CHERI_KERNEL
+		uio2uioc(trl_uio, &tmp_uio);
+		error = kern_writev(td, sockfd, tmp_uio);
+		free(tmp_uio, M_IOV);
+#else
 		error = kern_writev(td, sockfd, trl_uio);
+#endif
 		if (error == 0)
 			sbytes += td->td_retval[0];
 		goto out;

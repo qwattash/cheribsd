@@ -257,6 +257,9 @@ pmclog_loop(void *arg)
 	struct uio auio;
 	struct iovec aiov;
 	size_t nbytes;
+#ifdef CHERI_KERNEL
+	struct uio_c *tmp_uio;
+#endif
 
 	po = (struct pmc_owner *) arg;
 	p = po->po_owner;
@@ -335,7 +338,14 @@ pmclog_loop(void *arg)
 
 		/* switch thread credentials -- see kern_ktrace.c */
 		td->td_ucred = ownercred;
+#ifdef CHERI_KERNEL
+		/* fo_write needs a capability-aware uio struct */
+		uio2uioc(&auio, &tmp_uio);
 		error = fo_write(po->po_file, &auio, ownercred, 0, td);
+		free(tmp_uio, M_IOV);
+#else
+		error = fo_write(po->po_file, &auio, ownercred, 0, td);
+#endif
 		td->td_ucred = mycred;
 
 		if (error) {

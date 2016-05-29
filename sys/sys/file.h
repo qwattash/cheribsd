@@ -43,6 +43,9 @@
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
 #include <vm/vm.h>
+#ifdef CHERI_KERNEL
+#include <sys/uio.h>
+#endif
 
 struct filedesc;
 struct stat;
@@ -92,9 +95,15 @@ foffset_get(struct file *fp)
 	return (foffset_lock(fp, FOF_NOLOCK));
 }
 
+#ifdef CHERI_KERNEL
+typedef int fo_rdwr_t(struct file *fp, struct uio_c *uio,
+		    struct ucred *active_cred, int flags,
+		    struct thread *td);
+#else
 typedef int fo_rdwr_t(struct file *fp, struct uio *uio,
 		    struct ucred *active_cred, int flags,
 		    struct thread *td);
+#endif
 typedef	int fo_truncate_t(struct file *fp, off_t length,
 		    struct ucred *active_cred, struct thread *td);
 typedef	int fo_ioctl_t(struct file *fp, u_long com, void *data,
@@ -292,17 +301,56 @@ static __inline fo_chmod_t	fo_chmod;
 static __inline fo_chown_t	fo_chown;
 static __inline fo_sendfile_t	fo_sendfile;
 
-static __inline int
-fo_read(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
-{
+#ifdef CHERI_KERNEL
+/*
+ * define a wrapper around a capability-enabled fo_rdwr_t operation
+ */
+#define FO_CAP_WRAPPER(handler)						\
+	static int handler##_cap(struct file *fp, struct uio_c *uio,	\
+				 struct ucred *active_cred, int flags,	\
+				 struct thread *td)			\
+	{								\
+		struct uio *tmp_uio;					\
+		int error;						\
+		uioc2uio(uio, &tmp_uio);				\
+		error = handler(fp, tmp_uio, active_cred, flags, td);	\
+		uio->uio_iovcnt = tmp_uio->uio_iovcnt;			\
+		uio->uio_offset = tmp_uio->uio_offset;			\
+		uio->uio_resid = tmp_uio->uio_resid;			\
+		uio->uio_segflg = tmp_uio->uio_segflg;			\
+		uio->uio_rw = tmp_uio->uio_rw;				\
+		uio->uio_td = tmp_uio->uio_td;				\
+		free(tmp_uio, M_IOV);					\
+		return (error);						\
+	}
+#endif
 
+static __inline int
+fo_read(fp, uio, active_cred, flags, td)
+     struct file *fp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct ucred *active_cred;     
+     int flags;
+     struct thread *td;
+{
 	return ((*fp->f_ops->fo_read)(fp, uio, active_cred, flags, td));
 }
 
 static __inline int
-fo_write(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
+fo_write(fp, uio, active_cred, flags, td)
+     struct file *fp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct ucred *active_cred;
+     int flags;
+     struct thread *td;
 {
 
 	return ((*fp->f_ops->fo_write)(fp, uio, active_cred, flags, td));

@@ -143,8 +143,13 @@ __FBSDID("$FreeBSD$");
 /*
  * interfaces to the outside world
  */
+#ifdef CHERI_KERNEL
+static fo_rdwr_t	pipe_read_cap;
+static fo_rdwr_t	pipe_write_cap;
+#else
 static fo_rdwr_t	pipe_read;
 static fo_rdwr_t	pipe_write;
+#endif
 static fo_truncate_t	pipe_truncate;
 static fo_ioctl_t	pipe_ioctl;
 static fo_poll_t	pipe_poll;
@@ -156,8 +161,13 @@ static fo_chown_t	pipe_chown;
 static fo_fill_kinfo_t	pipe_fill_kinfo;
 
 struct fileops pipeops = {
+#ifdef CHERI_KERNEL
+	.fo_read = pipe_read_cap,
+	.fo_write = pipe_write_cap,
+#else
 	.fo_read = pipe_read,
 	.fo_write = pipe_write,
+#endif
 	.fo_truncate = pipe_truncate,
 	.fo_ioctl = pipe_ioctl,
 	.fo_poll = pipe_poll,
@@ -1835,3 +1845,8 @@ filt_pipenotsup(struct knote *kn, long hint)
 
 	return (0);
 }
+
+#ifdef CHERI_KERNEL
+FO_CAP_WRAPPER(pipe_read);
+FO_CAP_WRAPPER(pipe_write);
+#endif

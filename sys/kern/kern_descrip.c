@@ -3886,9 +3886,20 @@ SYSINIT(select, SI_SUB_LOCK, SI_ORDER_FIRST, filelistinit, NULL);
 
 /*-------------------------------------------------------------------*/
 
+/*
+ * Do not use a wrapper since it does nothing with the uio
+ */
 static int
-badfo_readwrite(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
+badfo_readwrite(fp, uio, active_cred, flags, td)
+     struct file *fp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else
+     struct uio *uio;
+#endif
+     struct ucred *active_cred;
+     int flags;
+     struct thread *td;
 {
 
 	return (EBADF);
@@ -3988,8 +3999,16 @@ struct fileops badfileops = {
 };
 
 int
-invfo_rdwr(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
+invfo_rdwr(fp, uio, active_cred, flags, td)
+     struct file *fp;
+#ifdef CHERI_KERNEL
+     struct uio_c *uio;
+#else     
+     struct uio *uio;
+#endif
+     struct ucred *active_cred;
+     int flags;
+     struct thread *td;
 {
 
 	return (EOPNOTSUPP);

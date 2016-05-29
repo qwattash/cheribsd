@@ -119,8 +119,13 @@ static struct shmfd *shm_lookup(char *path, Fnv32_t fnv);
 static int	shm_remove(char *path, Fnv32_t fnv, struct ucred *ucred);
 static int	shm_dotruncate(struct shmfd *shmfd, off_t length);
 
+#ifdef CHERI_KERNEL
+static fo_rdwr_t	shm_read_cap;
+static fo_rdwr_t	shm_write_cap;
+#else
 static fo_rdwr_t	shm_read;
 static fo_rdwr_t	shm_write;
+#endif
 static fo_truncate_t	shm_truncate;
 static fo_stat_t	shm_stat;
 static fo_close_t	shm_close;
@@ -132,8 +137,13 @@ static fo_mmap_t	shm_mmap;
 
 /* File descriptor operations. */
 static struct fileops shm_ops = {
+#ifdef CHERI_KERNEL
+	.fo_read = shm_read_cap,
+	.fo_write = shm_write_cap,
+#else
 	.fo_read = shm_read,
 	.fo_write = shm_write,
+#endif
 	.fo_truncate = shm_truncate,
 	.fo_ioctl = invfo_ioctl,
 	.fo_poll = invfo_poll,
@@ -1083,3 +1093,8 @@ shm_fill_kinfo(struct file *fp, struct kinfo_file *kif, struct filedesc *fdp)
 	}
 	return (0);
 }
+
+#ifdef CHERI_KERNEL
+FO_CAP_WRAPPER(shm_read);
+FO_CAP_WRAPPER(shm_write);
+#endif

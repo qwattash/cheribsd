@@ -866,6 +866,9 @@ aio_process_rw(struct aiocblist *aiocbe)
 	struct socket *so;
 	struct uio auio;
 	struct iovec aiov;
+#ifdef CHERI_KERNEL
+	struct uio_c *tmp_uio;
+#endif
 	int cnt;
 	int error;
 	int oublock_st, oublock_end;
@@ -902,13 +905,28 @@ aio_process_rw(struct aiocblist *aiocbe)
 		auio.uio_rw = UIO_READ;
 		if (auio.uio_resid == 0)
 			error = 0;
-		else
+		else {
+#ifdef CHERI_KERNEL
+			/* fo_read needs a capability-aware uio struct */
+			uio2uioc(&auio, &tmp_uio);
+			error = fo_read(fp, tmp_uio, fp->f_cred, FOF_OFFSET, td);
+			free(tmp_uio, M_IOV);
+#else
 			error = fo_read(fp, &auio, fp->f_cred, FOF_OFFSET, td);
+#endif
+		}
 	} else {
 		if (fp->f_type == DTYPE_VNODE)
 			bwillwrite();
 		auio.uio_rw = UIO_WRITE;
+#ifdef CHERI_KERNEL
+		/* fo_write needs a capability-aware uio struct */
+		uio2uioc(&auio, &tmp_uio);
+		error = fo_write(fp, tmp_uio, fp->f_cred, FOF_OFFSET, td);
+		free(tmp_uio, M_IOV);
+#else
 		error = fo_write(fp, &auio, fp->f_cred, FOF_OFFSET, td);
+#endif
 	}
 	inblock_end = td->td_ru.ru_inblock;
 	oublock_end = td->td_ru.ru_oublock;

@@ -596,9 +596,19 @@ ptsdev_fill_kinfo(struct file *fp, struct kinfo_file *kif, struct filedesc *fdp)
 	return (0);
 }
 
+#ifdef CHERI_KERNEL
+FO_CAP_WRAPPER(ptsdev_read);
+FO_CAP_WRAPPER(ptsdev_write);
+#endif
+
 static struct fileops ptsdev_ops = {
+#ifdef CHERI_KERNEL
+	.fo_read	= ptsdev_read_cap,
+	.fo_write	= ptsdev_write_cap,
+#else
 	.fo_read	= ptsdev_read,
 	.fo_write	= ptsdev_write,
+#endif
 	.fo_truncate	= invfo_truncate,
 	.fo_ioctl	= ptsdev_ioctl,
 	.fo_poll	= ptsdev_poll,

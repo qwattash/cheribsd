@@ -99,6 +99,9 @@ dump_bytes(dmu_sendarg_t *dsp, void *buf, int len)
 	dsl_dataset_t *ds = dmu_objset_ds(dsp->dsa_os);
 	struct uio auio;
 	struct iovec aiov;
+#if defined(CHERI_KERNEL) && defined(_KERNEL)
+	struct uio_c *tmp_uio;
+#endif
 	ASSERT0(len % 8);
 
 	aiov.iov_base = buf;
@@ -113,8 +116,17 @@ dump_bytes(dmu_sendarg_t *dsp, void *buf, int len)
 #ifdef _KERNEL
 	if (dsp->dsa_fp->f_type == DTYPE_VNODE)
 		bwillwrite();
+#ifdef CHERI_KERNEL
+	/* fo_read needs a capability-aware uio struct */
+	uio2uioc(&auio, &tmp_uio);
+	dsp->dsa_err = fo_write(dsp->dsa_fp, tmp_uio, dsp->dsa_td->td_ucred, 0,
+	    dsp->dsa_td);
+	free(tmp_uio, M_IOV);
+#else
 	dsp->dsa_err = fo_write(dsp->dsa_fp, &auio, dsp->dsa_td->td_ucred, 0,
 	    dsp->dsa_td);
+#endif
+
 #else
 	fprintf(stderr, "%s: returning EOPNOTSUPP\n", __func__);
 	dsp->dsa_err = EOPNOTSUPP;
@@ -1790,6 +1802,9 @@ restore_bytes(struct receive_arg *ra, void *buf, int len, off_t off, ssize_t *re
 	struct uio auio;
 	struct iovec aiov;
 	int error;
+#if defined(CHERI_KERNEL) && defined(_KERNEL)
+	struct uio_c *tmp_uio;
+#endif
 
 	aiov.iov_base = buf;
 	aiov.iov_len = len;
@@ -1801,7 +1816,14 @@ restore_bytes(struct receive_arg *ra, void *buf, int len, off_t off, ssize_t *re
 	auio.uio_offset = off;
 	auio.uio_td = ra->td;
 #ifdef _KERNEL
+#ifdef CHERI_KERNEL
+	/* fo_read needs a capability-aware uio struct */
+	uio2uioc(&auio, &tmp_uio);
+	error = fo_read(ra->fp, tmp_uio, ra->td->td_ucred, FOF_OFFSET, ra->td);
+	free(tmp_uio, M_IOV);
+#else
 	error = fo_read(ra->fp, &auio, ra->td->td_ucred, FOF_OFFSET, ra->td);
+#endif
 #else
 	fprintf(stderr, "%s: returning EOPNOTSUPP\n", __func__);
 	error = EOPNOTSUPP;
