@@ -295,6 +295,34 @@ int	casueword32(volatile uint32_t *base, uint32_t oldval, uint32_t *oldvalp,
 int	casueword(volatile u_long *p, u_long oldval, u_long *oldvalp,
 	    u_long newval);
 
+#if defined(CHERI_KERNEL) && defined(CPU_CHERI)
+int	copystr_cap(__capability const void * __restrict kfaddr,
+		    __capability void * __restrict kdaddr,
+		    size_t len,
+		    __capability size_t * __restrict lencopied)
+	__nonnull(1) __nonnull(2);
+int	copyinstr_cap(__capability const void * __restrict udaddr,
+		      __capability void * __restrict kaddr,
+		      size_t len,
+		      __capability size_t * __restrict lencopied)
+	__nonnull(1) __nonnull(2);
+int	copyin_cap(__capability const void * __restrict udaddr,
+		   __capability void * __restrict kaddr,
+		   size_t len) __nonnull(1) __nonnull(2);
+int	copyout_cap(__capability const void * __restrict kaddr,
+		    __capability void * __restrict udaddr,
+		    size_t len) __nonnull(1) __nonnull(2);
+int	fubyte_cap(__capability volatile const void *base);
+int	subyte_cap(__capability volatile void *base, int byte);
+
+void	bcopy_cap(__capability const void *from,
+		  __capability void *to,
+		  size_t len) __nonnull(1) __nonnull(2);
+__capability void *memcpy_cap(__capability void *to,
+ 			      __capability const void *from,
+ 			      size_t len) __nonnull(1) __nonnull(2);
+#endif
+
 void	realitexpire(void *);
 
 int	sysbeep(int hertz, int period);

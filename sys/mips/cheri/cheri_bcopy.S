@@ -82,3 +82,72 @@ return:
 	jr	ra
 	nop
 END(cheri_memcpy)
+
+#ifdef CHERI_KERNEL
+/*
+ *	Capability-enabled version of bcopy with capability arguments
+ *	__capability void *memcpy(dst, src, len)
+ *		__capability char *dst
+ *		__capability char *src
+ *		unsigned int len
+ *	bcopy(src, dst, len)
+ * 		__capability char *src
+ *		__capability char *dst
+ *		unsigned int len
+ *
+ *	c3 	src address
+ *	c4	dst address
+ *	a0	length
+ */
+
+/*
+ * Helpers that compute the frame size given the number of extra
+ * integer and capability registers to be saved
+ */
+NESTED(memcpy_cap, CHERI_FRAME_SIZ(0, 1), ra)
+	dsubu	sp, sp, CHERI_FRAME_SIZ(0, 1)
+	.mask	0x80000000, (CHERI_FRAME_RA(0, 1) - CHERI_FRAME_SIZ(0, 1))
+	sd	ra, CHERI_FRAME_RA(0, 1)(sp)
+	/* memcpy has inverted src/dst pointers */
+	cmove	$c13, $c3
+	cmove	$c3, $c4
+	cmove	$c4, $c13
+	PTR_LA	t9, _C_LABEL(bcopy_cap)
+	jalr	t9
+	csc	$c13, sp, 0(CHERI_REG_KDC)
+	clc	$c3, sp, 0(CHERI_REG_KDC)
+	ld	ra, CHERI_FRAME_RA(0, 1)(sp)
+	jr	ra
+	daddiu	sp, sp, CHERI_FRAME_SIZ(0, 1)
+END(memcpy_cap)
+
+LEAF(bcopy_cap)
+	beqz	a0, 3f		/* Return immediately if zero-length. */
+	li	v1, -CHERICAP_SIZE	/* Handle under-aligned lengths by... */
+	and	t0, a0, v1	/* .. truncating the length to capsize bytes. */
+	li	v1, CHERICAP_SIZE
+1:
+	clc	$c13, zero, 0($c3)
+	cincoffset $c3, $c3, v1
+	csc	$c13, zero, 0($c4)
+	dsubu	t0, t0, v1
+	bnez	t0, 1b  	/* loop */
+	cincoffset $c4, $c4, v1
+	/* we need to copy the remaining length that was not aligned */
+	andi	a0, a0, (CHERICAP_SIZE - 1) /* number of extra bytes */
+XLEAF(bcopy_misaligned_cap)
+	beqz	a0, 3f		/* return if zero length */
+	li	v1, 1
+2:
+	clb	t0, zero, 0($c3)
+	cincoffset $c3, $c3, v1
+	csb	t0, zero, 0($c4)
+	dsubu	a0, a0, v1
+	bnez	a0, 2b		/* loop on extra bytes */
+	cincoffset $c4, $c4, v1
+3:
+	jr	ra
+	nop
+END(bcopy_cap)
+
+#endif /* CHERI_KERNEL */
