@@ -143,3 +143,96 @@ out:
 		td->td_pflags &= ~TDP_DEADLKTREAT;
 	return (error);
 }
+
+#ifdef CHERI_KERNEL
+/*
+ * XXXAM: this is to be merged with uiomove_fromphys once all callers
+ * are migrated to the capability-enabled iovec
+ */
+int
+uiomove_fromphys_cap(vm_page_t ma[], vm_offset_t offset, int n, struct uio_c *uio)
+{
+	struct sf_buf *sf;
+	struct thread *td = curthread;
+	struct iovec_c *iov;
+	__capability void *cp;
+	vm_offset_t page_offset;
+	vm_paddr_t pa;
+	vm_page_t m;
+	size_t cnt;
+	int error = 0;
+	int save = 0;
+
+	KASSERT(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE,
+	    ("uiomove_fromphys: mode"));
+	KASSERT(uio->uio_segflg != UIO_USERSPACE || uio->uio_td == curthread,
+	    ("uiomove_fromphys proc"));
+	save = td->td_pflags & TDP_DEADLKTREAT;
+	td->td_pflags |= TDP_DEADLKTREAT;
+	while (n > 0 && uio->uio_resid) {
+		iov = uio->uio_iov;
+		cnt = iov->iov_len;
+		if (cnt == 0) {
+			uio->uio_iov++;
+			uio->uio_iovcnt--;
+			continue;
+		}
+		if (cnt > n)
+			cnt = n;
+		page_offset = offset & PAGE_MASK;
+		cnt = ulmin(cnt, PAGE_SIZE - page_offset);
+		m = ma[offset >> PAGE_SHIFT];
+		pa = VM_PAGE_TO_PHYS(m);
+		if (MIPS_DIRECT_MAPPABLE(pa)) {
+			sf = NULL;
+			cp = (__capability char *)MIPS_PHYS_TO_DIRECT(pa) +
+				page_offset;
+			/*
+			 * flush all mappings to this page, KSEG0 address first
+			 * in order to get it overwritten by correct data
+			 */
+			mips_dcache_wbinv_range((vm_offset_t)cp, cnt);
+			pmap_flush_pvcache(m);
+		} else {
+			sf = sf_buf_alloc(m, 0);
+			cp = (__capability char *)sf_buf_kva(sf) + page_offset;
+		}
+		switch (uio->uio_segflg) {
+		case UIO_USERSPACE:
+			maybe_yield();
+			if (uio->uio_rw == UIO_READ)
+				error = copyout_cap(cp, iov->iov_base, cnt);
+			else
+				error = copyin_cap(iov->iov_base, cp, cnt);
+			if (error) {
+				if (sf != NULL)
+					sf_buf_free(sf);
+				goto out;
+			}
+			break;
+		case UIO_SYSSPACE:
+			if (uio->uio_rw == UIO_READ)
+				bcopy_cap(cp, iov->iov_base, cnt);
+			else
+				bcopy_cap(iov->iov_base, cp, cnt);
+			break;
+		case UIO_NOCOPY:
+			break;
+		}
+		if (sf != NULL)
+			sf_buf_free(sf);
+		else
+			mips_dcache_wbinv_range((vm_offset_t)cp, cnt);
+		iov->iov_base = (__capability char *)iov->iov_base + cnt;
+		iov->iov_len -= cnt;
+		uio->uio_resid -= cnt;
+		uio->uio_offset += cnt;
+		offset += cnt;
+		n -= cnt;
+	}
+out:
+	if (save == 0)
+		td->td_pflags &= ~TDP_DEADLKTREAT;
+	return (error);
+}
+#endif

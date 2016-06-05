@@ -160,6 +160,8 @@ int     uiomove_cap(__capability void *cp, int n, struct uio_c *uio);
 int     uiomove_nofault_cap(__capability void *cp, int n, struct uio_c *uio);
 int     copyinuio_cap(const struct iovec *iovp, u_int iovcnt,
 		      struct uio_c **uiop);
+int	uiomove_fromphys_cap(struct vm_page *ma[], vm_offset_t offset, int n,
+			     struct uio_c *uio);
 struct uio_c *cloneuio_cap(struct uio_c *uiop);
 int     uioc2uio(struct uio_c *uio_c, struct uio **uiop);
 int     uio2uioc(struct uio *uio, struct uio_c **uiop);
