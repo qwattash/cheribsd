@@ -152,6 +152,19 @@ cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
 	return (cheri_setoffset(cheri_ptrperm(ptr, len, perm), off));
 }
 
+static __inline __capability void *
+cheri_ptrfromreg(const void *ptr, size_t len, register_t perm,
+		 __capability void *parent)
+{
+	__capability void *_cap;
+	__asm __volatile ("cfromptr %0, %1, %2"
+			  : "=C" (_cap)
+			  : "C" (parent), "r" (ptr));
+	_cap = cheri_csetbounds(_cap, len);
+	_cap = cheri_andperm(_cap, CHERI_PERM_GLOBAL | perm);
+	return (_cap);
+}
+
 /*
  * Construct a capability suitable to describe a type identified by 'ptr';
  * set it to zero-length with the offset equal to the base.  The caller must
