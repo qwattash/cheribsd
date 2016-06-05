@@ -143,13 +143,8 @@ __FBSDID("$FreeBSD$");
 /*
  * interfaces to the outside world
  */
-#ifdef CHERI_KERNEL
-static fo_rdwr_t	pipe_read_cap;
-static fo_rdwr_t	pipe_write_cap;
-#else
 static fo_rdwr_t	pipe_read;
 static fo_rdwr_t	pipe_write;
-#endif
 static fo_truncate_t	pipe_truncate;
 static fo_ioctl_t	pipe_ioctl;
 static fo_poll_t	pipe_poll;
@@ -161,13 +156,8 @@ static fo_chown_t	pipe_chown;
 static fo_fill_kinfo_t	pipe_fill_kinfo;
 
 struct fileops pipeops = {
-#ifdef CHERI_KERNEL
-	.fo_read = pipe_read_cap,
-	.fo_write = pipe_write_cap,
-#else
 	.fo_read = pipe_read,
 	.fo_write = pipe_write,
-#endif
 	.fo_truncate = pipe_truncate,
 	.fo_ioctl = pipe_ioctl,
 	.fo_poll = pipe_poll,
@@ -239,9 +229,14 @@ static void pipe_paircreate(struct thread *td, struct pipepair **p_pp);
 static __inline int pipelock(struct pipe *cpipe, int catch);
 static __inline void pipeunlock(struct pipe *cpipe);
 #ifndef PIPE_NODIRECT
+#ifdef CHERI_KERNEL
+static int pipe_build_write_buffer(struct pipe *wpipe, struct uio_c *uio);
+static int pipe_direct_write(struct pipe *wpipe, struct uio_c *uio);
+#else
 static int pipe_build_write_buffer(struct pipe *wpipe, struct uio *uio);
-static void pipe_destroy_write_buffer(struct pipe *wpipe);
 static int pipe_direct_write(struct pipe *wpipe, struct uio *uio);
+#endif
+static void pipe_destroy_write_buffer(struct pipe *wpipe);
 static void pipe_clone_write_buffer(struct pipe *wpipe);
 #endif
 static int pipespace(struct pipe *cpipe, int size);
@@ -663,7 +658,11 @@ pipe_create(pipe, backing)
 static int
 pipe_read(fp, uio, active_cred, flags, td)
 	struct file *fp;
+#ifdef CHERI_KERNEL
+	struct uio_c *uio;
+#else
 	struct uio *uio;
+#endif
 	struct ucred *active_cred;
 	struct thread *td;
 	int flags;
@@ -672,7 +671,10 @@ pipe_read(fp, uio, active_cred, flags, td)
 	int error;
 	int nread = 0;
 	int size;
-
+#ifdef CHERI_KERNEL
+	__capability void *cp;
+#endif
+	
 	rpipe = fp->f_data;
 	PIPE_LOCK(rpipe);
 	++rpipe->pipe_busy;
@@ -708,9 +710,15 @@ pipe_read(fp, uio, active_cred, flags, td)
 				size = uio->uio_resid;
 
 			PIPE_UNLOCK(rpipe);
+#ifdef CHERI_KERNEL
+			cp = (__capability void *)
+				&rpipe->pipe_buffer.buffer[rpipe->pipe_buffer.out];
+			error = uiomove_cap(cp, size, uio);
+#else
 			error = uiomove(
 			    &rpipe->pipe_buffer.buffer[rpipe->pipe_buffer.out],
 			    size, uio);
+#endif
 			PIPE_LOCK(rpipe);
 			if (error)
 				break;
@@ -741,8 +749,13 @@ pipe_read(fp, uio, active_cred, flags, td)
 				size = (u_int) uio->uio_resid;
 
 			PIPE_UNLOCK(rpipe);
+#ifdef CHERI_KERNEL
+			error = uiomove_fromphys_cap(rpipe->pipe_map.ms,
+			    rpipe->pipe_map.pos, size, uio);
+#else
 			error = uiomove_fromphys(rpipe->pipe_map.ms,
 			    rpipe->pipe_map.pos, size, uio);
+#endif
 			PIPE_LOCK(rpipe);
 			if (error)
 				break;
@@ -842,7 +855,11 @@ unlocked_error:
 static int
 pipe_build_write_buffer(wpipe, uio)
 	struct pipe *wpipe;
+#ifdef CHERI_KERNEL
+	struct uio_c *uio;
+#else
 	struct uio *uio;
+#endif
 {
 	u_int size;
 	int i;
@@ -874,7 +891,12 @@ pipe_build_write_buffer(wpipe, uio)
  */
 
 	uio->uio_iov->iov_len -= size;
+#ifdef CHERI_KERNEL
+	uio->uio_iov->iov_base = (__capability char *)
+		uio->uio_iov->iov_base + size;
+#else
 	uio->uio_iov->iov_base = (char *)uio->uio_iov->iov_base + size;
+#endif
 	if (uio->uio_iov->iov_len == 0)
 		uio->uio_iov++;
 	uio->uio_resid -= size;
@@ -943,7 +965,11 @@ pipe_clone_write_buffer(wpipe)
 static int
 pipe_direct_write(wpipe, uio)
 	struct pipe *wpipe;
+#ifdef CHERI_KERNEL
+	struct uio_c *uio;
+#else
 	struct uio *uio;
+#endif
 {
 	int error;
 
@@ -1044,7 +1070,11 @@ error1:
 static int
 pipe_write(fp, uio, active_cred, flags, td)
 	struct file *fp;
+#ifdef CHERI_KERNEL
+	struct uio_c *uio;
+#else
 	struct uio *uio;
+#endif
 	struct ucred *active_cred;
 	struct thread *td;
 	int flags;
@@ -1053,7 +1083,10 @@ pipe_write(fp, uio, active_cred, flags, td)
 	int desiredsize;
 	ssize_t orig_resid;
 	struct pipe *wpipe, *rpipe;
-
+#ifdef CHERI_KERNEL
+	__capability void *cp;
+#endif
+	
 	rpipe = fp->f_data;
 	wpipe = PIPE_PEER(rpipe);
 	PIPE_LOCK(rpipe);
@@ -1210,8 +1243,14 @@ pipe_write(fp, uio, active_cred, flags, td)
 			/* Transfer first segment */
 
 			PIPE_UNLOCK(rpipe);
+#ifdef CHERI_KERNEL
+			cp = (__capability void *)
+				&wpipe->pipe_buffer.buffer[wpipe->pipe_buffer.in];
+			error = uiomove_cap(cp, segsize, uio);
+#else
 			error = uiomove(&wpipe->pipe_buffer.buffer[wpipe->pipe_buffer.in],
 					segsize, uio);
+#endif
 			PIPE_LOCK(rpipe);
 
 			if (error == 0 && segsize < size) {
@@ -1225,9 +1264,15 @@ pipe_write(fp, uio, active_cred, flags, td)
 				 */
 
 				PIPE_UNLOCK(rpipe);
+#ifdef CHERI_KERNEL
+				cp = (__capability void *)
+					&wpipe->pipe_buffer.buffer[0];
+				error = uiomove_cap(cp, size - segsize, uio);
+#else
 				error = uiomove(
 				    &wpipe->pipe_buffer.buffer[0],
 				    size - segsize, uio);
+#endif
 				PIPE_LOCK(rpipe);
 			}
 			if (error == 0) {
@@ -1845,8 +1890,3 @@ filt_pipenotsup(struct knote *kn, long hint)
 
 	return (0);
 }
-
-#ifdef CHERI_KERNEL
-FO_CAP_WRAPPER(pipe_read);
-FO_CAP_WRAPPER(pipe_write);
-#endif
