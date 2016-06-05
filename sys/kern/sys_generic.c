@@ -77,6 +77,8 @@ __FBSDID("$FreeBSD$");
 
 #ifdef CHERI_KERNEL
 #include <machine/cheric.h>
+#include <machine/cheri.h>
+#include <machine/pcb.h>
 #endif
 
 /*
@@ -185,6 +187,7 @@ sys_read(td, uap)
 #ifdef CHERI_KERNEL
 	struct uio_c auio;
 	struct iovec_c aiov;
+	struct cheri_frame *cfp;
 #else
 	struct uio auio;
 	struct iovec aiov;
@@ -194,7 +197,11 @@ sys_read(td, uap)
 	if (uap->nbyte > IOSIZE_MAX)
 		return (EINVAL);
 #ifdef CHERI_KERNEL
-	aiov.iov_base = cheri_ptr(uap->buf, uap->nbyte);
+	cfp = &td->td_pcb->pcb_cheriframe;
+	aiov.iov_base = cheri_ptrfromreg(uap->buf,
+					 uap->nbyte,
+					 CHERI_PERM_STORE,
+					 cfp->cf_c0);
 #else
 	aiov.iov_base = uap->buf;
 #endif
@@ -227,6 +234,7 @@ sys_pread(td, uap)
 #ifdef CHERI_KERNEL
 	struct uio_c auio;
 	struct iovec_c aiov;
+	struct cheri_frame *cfp;
 #else
 	struct uio auio;
 	struct iovec aiov;
@@ -236,7 +244,11 @@ sys_pread(td, uap)
 	if (uap->nbyte > IOSIZE_MAX)
 		return (EINVAL);
 #ifdef CHERI_KERNEL
-	aiov.iov_base = cheri_ptr(uap->buf, uap->nbyte);
+	cfp = &td->td_pcb->pcb_cheriframe;
+	aiov.iov_base = cheri_ptrfromreg(uap->buf,
+					 uap->nbyte,
+					 CHERI_PERM_STORE,
+					 cfp->cf_c0);
 #else
 	aiov.iov_base = uap->buf;
 #endif
@@ -280,13 +292,26 @@ sys_readv(struct thread *td, struct readv_args *uap)
 {
 #ifdef CHERI_KERNEL
 	struct uio_c *auio;
+	int i;
 #else
 	struct uio *auio;
 #endif
 	int error;
 
 #ifdef CHERI_KERNEL
+	/* 
+	 * XXXAM: copyinuio_cap needs the cheriframe properly cfromptr the 
+	 * iov_base using the DDC of the caller thread.
+	 */
 	error = copyinuio_cap(uap->iovp, uap->iovcnt, &auio);
+	if (error)
+		return (error);
+	/* force iovec pointers have only STORE perms */
+	/* for (i = 0; i < auio->uio_iovcnt; i++) { */
+	/* 	auio->uio_iov[i].iov_base = */
+	/* 		cheri_andperm(auio->uio_iov[i].iov_base, */
+	/* 			      CHERI_PERM_STORE | CHERI_PERM_GLOBAL); */
+	/* } */
 #else
 	error = copyinuio(uap->iovp, uap->iovcnt, &auio);
 #endif
@@ -434,9 +459,13 @@ dofileread(td, fd, fp, auio, offset, flags)
 #ifdef KTRACE
 	if (ktruio != NULL) {
 		ktruio->uio_resid = cnt;
+#ifdef CHERI_KERNEL
 		uioc2uio(ktruio, &tmp_ktruio);
 		ktrgenio(fd, UIO_READ, tmp_ktruio, error);
 		free(ktruio, M_IOV);
+#else
+		ktrgenio(fd, UIO_READ, ktruio, error);
+#endif
 	}
 #endif
 	td->td_retval[0] = cnt;
@@ -458,6 +487,7 @@ sys_write(td, uap)
 #ifdef CHERI_KERNEL
 	struct uio_c auio;
 	struct iovec_c aiov;
+	struct cheri_frame *cfp;
 #else
 	struct uio auio;
 	struct iovec aiov;
@@ -468,8 +498,12 @@ sys_write(td, uap)
 		return (EINVAL);
 	/* aiov.iov_base = (void *)(uintptr_t)uap->buf; */
 #ifdef CHERI_KERNEL
-	aiov.iov_base = cheri_ptr(uap->buf, uap->nbyte);
-#else
+	cfp = &td->td_pcb->pcb_cheriframe;
+	aiov.iov_base = cheri_ptrfromreg(uap->buf,
+					 uap->nbyte,
+					 CHERI_PERM_LOAD,
+					 cfp->cf_c0);
+#else	
 	aiov.iov_base = uap->buf;
 #endif
 	aiov.iov_len = uap->nbyte;
@@ -501,6 +535,7 @@ sys_pwrite(td, uap)
 #ifdef CHERI_KERNEL
 	struct uio_c auio;
 	struct iovec_c aiov;
+	struct cheri_frame *cfp;
 #else
 	struct uio auio;
 	struct iovec aiov;
@@ -509,9 +544,12 @@ sys_pwrite(td, uap)
 
 	if (uap->nbyte > IOSIZE_MAX)
 		return (EINVAL);
-	/* aiov.iov_base = (void *)(uintptr_t)uap->buf; */
 #ifdef CHERI_KERNEL
-	aiov.iov_base = cheri_ptr(uap->buf, uap->nbyte);
+	cfp = &td->td_pcb->pcb_cheriframe;
+	aiov.iov_base = cheri_ptrfromreg(uap->buf,
+					 uap->nbyte,
+					 CHERI_PERM_LOAD,
+					 cfp->cf_c0);
 #else
 	aiov.iov_base = uap->buf;
 #endif
@@ -555,12 +593,21 @@ sys_writev(struct thread *td, struct writev_args *uap)
 {
 #ifdef CHERI_KERNEL
 	struct uio_c *auio;
+	int i;
 #else
 	struct uio *auio;
 #endif
 	int error;
 #ifdef CHERI_KERNEL
 	error = copyinuio_cap(uap->iovp, uap->iovcnt, &auio);
+	if (error)
+		return (error);
+	/* force iovec pointers have only LOAD perms */
+	/* for (i = 0; i < auio->uio_iovcnt; i++) { */
+	/* 	auio->uio_iov[i].iov_base = */
+	/* 		cheri_andperm(auio->uio_iov[i].iov_base, */
+	/* 			      CHERI_PERM_LOAD | CHERI_PERM_GLOBAL); */
+	/* } */
 #else
 	error = copyinuio(uap->iovp, uap->iovcnt, &auio);
 #endif
@@ -711,9 +758,13 @@ dofilewrite(td, fd, fp, auio, offset, flags)
 #ifdef KTRACE
 	if (ktruio != NULL) {
 		ktruio->uio_resid = cnt;
+#ifdef CHERI_KERNEL
 		uioc2uio(ktruio, &tmp_ktruio);
 		ktrgenio(fd, UIO_WRITE, tmp_ktruio, error);
 		free(ktruio, M_IOV);
+#else
+		ktrgenio(fd, UIO_WRITE, ktruio, error);
+#endif
 	}
 #endif
 	td->td_retval[0] = cnt;

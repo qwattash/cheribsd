@@ -584,9 +584,7 @@ cheriabi_kevent(struct thread *td, struct cheriabi_kevent_args *uap)
 
 #ifdef CHERI_KERNEL
 
-#ifdef CHERI_KERNEL
 #define CAP_ALIGN(ptr) ((uintptr_t)(ptr) & -CHERICAP_SIZE);
-#endif
 
 static int
 cheriabi_copyinuio_cap(__capability struct iovec_c *iovp, u_int iovcnt, struct uio_c **uiop)
