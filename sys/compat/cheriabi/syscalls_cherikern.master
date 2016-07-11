@@ -78,7 +78,7 @@
 				    size_t nbyte); }
 5	AUE_OPEN_RWTC	CHERI	{ int open(char *path, int flags, \
 				    int mode); }
-6	AUE_CLOSE	CHERI	{ int close(int fd); }
+6	AUE_CLOSE	NOPROTO	{ int close(int fd); }
 7	AUE_WAIT4	CHERI	{ int wait4(int pid, int *status, \
 				    int options, struct rusage *rusage); }
 8	AUE_CREAT	OBSOL	old creat
@@ -93,12 +93,12 @@
 17	AUE_NULL	OBSOL	obreak
 18	AUE_GETFSSTAT	OBSOL	getstatfs
 19	AUE_LSEEK	OBSOL	lseek
-20	AUE_GETPID	CHERI	{ pid_t getpid(void); }
+20	AUE_GETPID	NOPROTO	{ pid_t getpid(void); }
 21	AUE_MOUNT	CHERI	{ int mount(char *type, char *path, \
 				    int flags, caddr_t data); }
 22	AUE_UMOUNT	CHERI	{ int unmount(char *path, int flags); }
 23	AUE_SETUID	CHERI	{ int setuid(uid_t uid); }
-24	AUE_GETUID	CHERI	{ uid_t getuid(void); }
+24	AUE_GETUID	NOPROTO	{ uid_t getuid(void); }
 25	AUE_GETEUID	CHERI	{ uid_t geteuid(void); }
 26	AUE_PTRACE	CHERI	{ int ptrace(int req, pid_t pid, \
 				    caddr_t addr, int data); }
@@ -135,7 +135,7 @@
 38	AUE_STAT	OBSOL	stat
 39	AUE_GETPPID	CHERI	{ pid_t getppid(void); }
 40	AUE_LSTAT	OBSOL	lstat
-41	AUE_DUP		CHERI	{ int dup(u_int fd); }
+41	AUE_DUP		NOPROTO	{ int dup(u_int fd); }
 42	AUE_PIPE	CHERI	{ int pipe(void); }
 43	AUE_GETEGID	CHERI	{ gid_t getegid(void); }
 44	AUE_PROFILE	CHERI	{ int profil(caddr_t samples, size_t size, \
@@ -170,7 +170,7 @@
 59	AUE_EXECVE	STD	{ int cheriabi_execve(__capability char *fname, \
 				    __capability void *argv, \
 				    __capability void *envv); }
-60	AUE_UMASK	CHERI	{ int umask(int newmask); } umask \
+60	AUE_UMASK	NOPROTO	{ int umask(int newmask); } umask \
 				    umask_args int
 61	AUE_CHROOT	CHERI	{ int chroot(char *path); }
 62	AUE_FSTAT	OBSOL	fstat

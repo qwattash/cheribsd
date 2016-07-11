@@ -27,7 +27,7 @@ struct sysent cheriabi_sysent[] = {
 	{ 3, (sy_call_t *)cheriabi_read, AUE_READ, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 3 = cheriabi_read */
 	{ 3, (sy_call_t *)cheriabi_write, AUE_WRITE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 4 = cheriabi_write */
 	{ 3, (sy_call_t *)cheriabi_stub_open, AUE_OPEN_RWTC, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 5 = open */
-	{ 1, (sy_call_t *)cheriabi_stub_close, AUE_CLOSE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 6 = close */
+	{ 1, (sy_call_t *)sys_close, AUE_CLOSE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 6 = close */
 	{ 4, (sy_call_t *)cheriabi_stub_wait4, AUE_WAIT4, NULL, 0, 0, 0, SY_THR_STATIC },	/* 7 = wait4 */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 8 = obsolete old creat */
 	{ 2, (sy_call_t *)cheriabi_stub_link, AUE_LINK, NULL, 0, 0, 0, SY_THR_STATIC },	/* 9 = link */
@@ -41,11 +41,11 @@ struct sysent cheriabi_sysent[] = {
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 17 = obsolete obreak */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 18 = obsolete getstatfs */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 19 = obsolete lseek */
-	{ 0, (sy_call_t *)cheriabi_stub_getpid, AUE_GETPID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 20 = getpid */
+	{ 0, (sy_call_t *)sys_getpid, AUE_GETPID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 20 = getpid */
 	{ 4, (sy_call_t *)cheriabi_stub_mount, AUE_MOUNT, NULL, 0, 0, 0, SY_THR_STATIC },	/* 21 = mount */
 	{ 2, (sy_call_t *)cheriabi_stub_unmount, AUE_UMOUNT, NULL, 0, 0, 0, SY_THR_STATIC },	/* 22 = unmount */
 	{ 1, (sy_call_t *)cheriabi_stub_setuid, AUE_SETUID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 23 = setuid */
-	{ 0, (sy_call_t *)cheriabi_stub_getuid, AUE_GETUID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 24 = getuid */
+	{ 0, (sy_call_t *)sys_getuid, AUE_GETUID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 24 = getuid */
 	{ 0, (sy_call_t *)cheriabi_stub_geteuid, AUE_GETEUID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 25 = geteuid */
 	{ 4, (sy_call_t *)cheriabi_stub_ptrace, AUE_PTRACE, NULL, 0, 0, 0, SY_THR_STATIC },	/* 26 = ptrace */
 	{ 3, (sy_call_t *)cheriabi_recvmsg, AUE_RECVMSG, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 27 = cheriabi_recvmsg */
@@ -62,7 +62,7 @@ struct sysent cheriabi_sysent[] = {
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 38 = obsolete stat */
 	{ 0, (sy_call_t *)cheriabi_stub_getppid, AUE_GETPPID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 39 = getppid */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 40 = obsolete lstat */
-	{ 1, (sy_call_t *)cheriabi_stub_dup, AUE_DUP, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 41 = dup */
+	{ 1, (sy_call_t *)sys_dup, AUE_DUP, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 41 = dup */
 	{ 0, (sy_call_t *)cheriabi_stub_pipe, AUE_PIPE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 42 = pipe */
 	{ 0, (sy_call_t *)cheriabi_stub_getegid, AUE_GETEGID, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 43 = getegid */
 	{ 4, (sy_call_t *)cheriabi_stub_profil, AUE_PROFILE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 44 = profil */
@@ -81,7 +81,7 @@ struct sysent cheriabi_sysent[] = {
 	{ 2, (sy_call_t *)cheriabi_stub_symlink, AUE_SYMLINK, NULL, 0, 0, 0, SY_THR_STATIC },	/* 57 = symlink */
 	{ 3, (sy_call_t *)cheriabi_stub_readlink, AUE_READLINK, NULL, 0, 0, 0, SY_THR_STATIC },	/* 58 = readlink */
 	{ 3, (sy_call_t *)cheriabi_execve, AUE_EXECVE, NULL, 0, 0, 0, SY_THR_STATIC },	/* 59 = cheriabi_execve */
-	{ 1, (sy_call_t *)cheriabi_stub_umask, AUE_UMASK, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 60 = umask */
+	{ 1, (sy_call_t *)sys_umask, AUE_UMASK, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 60 = umask */
 	{ 1, (sy_call_t *)cheriabi_stub_chroot, AUE_CHROOT, NULL, 0, 0, 0, SY_THR_STATIC },	/* 61 = chroot */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 62 = obsolete fstat */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 63 = obsolete ogetkerninfo */
@@ -592,12 +592,6 @@ cheriabi_stub_open(struct thread *td, struct cheriabi_stub_open_args *uap)
 	return sys_open(td, &legacy_uap);
 }
 int
-cheriabi_stub_close(struct thread *td, struct cheriabi_stub_close_args *uap)
-{	struct close_args legacy_uap;
-	legacy_uap.fd = uap->fd;
-	return sys_close(td, &legacy_uap);
-}
-int
 cheriabi_stub_wait4(struct thread *td, struct cheriabi_stub_wait4_args *uap)
 {	struct wait4_args legacy_uap;
 	legacy_uap.pid = uap->pid;
@@ -655,11 +649,6 @@ cheriabi_stub_chown(struct thread *td, struct cheriabi_stub_chown_args *uap)
 	return sys_chown(td, &legacy_uap);
 }
 int
-cheriabi_stub_getpid(struct thread *td, struct cheriabi_stub_getpid_args *uap)
-{	struct getpid_args legacy_uap;
-	return sys_getpid(td, &legacy_uap);
-}
-int
 cheriabi_stub_mount(struct thread *td, struct cheriabi_stub_mount_args *uap)
 {	struct mount_args legacy_uap;
 	legacy_uap.type = (char *) uap->type;
@@ -680,11 +669,6 @@ cheriabi_stub_setuid(struct thread *td, struct cheriabi_stub_setuid_args *uap)
 {	struct setuid_args legacy_uap;
 	legacy_uap.uid = uap->uid;
 	return sys_setuid(td, &legacy_uap);
-}
-int
-cheriabi_stub_getuid(struct thread *td, struct cheriabi_stub_getuid_args *uap)
-{	struct getuid_args legacy_uap;
-	return sys_getuid(td, &legacy_uap);
 }
 int
 cheriabi_stub_geteuid(struct thread *td, struct cheriabi_stub_geteuid_args *uap)
@@ -774,12 +758,6 @@ cheriabi_stub_getppid(struct thread *td, struct cheriabi_stub_getppid_args *uap)
 	return sys_getppid(td, &legacy_uap);
 }
 int
-cheriabi_stub_dup(struct thread *td, struct cheriabi_stub_dup_args *uap)
-{	struct dup_args legacy_uap;
-	legacy_uap.fd = uap->fd;
-	return sys_dup(td, &legacy_uap);
-}
-int
 cheriabi_stub_pipe(struct thread *td, struct cheriabi_stub_pipe_args *uap)
 {	struct pipe_args legacy_uap;
 	return sys_pipe(td, &legacy_uap);
@@ -857,12 +835,6 @@ cheriabi_stub_readlink(struct thread *td, struct cheriabi_stub_readlink_args *ua
 	legacy_uap.buf = (char *) uap->buf;
 	legacy_uap.count = uap->count;
 	return sys_readlink(td, &legacy_uap);
-}
-int
-cheriabi_stub_umask(struct thread *td, struct cheriabi_stub_umask_args *uap)
-{	struct umask_args legacy_uap;
-	legacy_uap.newmask = uap->newmask;
-	return sys_umask(td, &legacy_uap);
 }
 int
 cheriabi_stub_chroot(struct thread *td, struct cheriabi_stub_chroot_args *uap)

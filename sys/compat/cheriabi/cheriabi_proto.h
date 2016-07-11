@@ -58,9 +58,6 @@ struct cheriabi_stub_open_args {
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char mode_l_[PADL_(int)]; int mode; char mode_r_[PADR_(int)];
 };
-struct cheriabi_stub_close_args {
-	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
-};
 struct cheriabi_stub_wait4_args {
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
 	char status_l_[PADL_(__capability int *)]; __capability int * status; char status_r_[PADR_(__capability int *)];
@@ -94,9 +91,6 @@ struct cheriabi_stub_chown_args {
 	char uid_l_[PADL_(int)]; int uid; char uid_r_[PADR_(int)];
 	char gid_l_[PADL_(int)]; int gid; char gid_r_[PADR_(int)];
 };
-struct cheriabi_stub_getpid_args {
-	register_t dummy;
-};
 struct cheriabi_stub_mount_args {
 	char type_l_[PADL_(__capability char *)]; __capability char * type; char type_r_[PADR_(__capability char *)];
 	char path_l_[PADL_(__capability char *)]; __capability char * path; char path_r_[PADR_(__capability char *)];
@@ -109,9 +103,6 @@ struct cheriabi_stub_unmount_args {
 };
 struct cheriabi_stub_setuid_args {
 	char uid_l_[PADL_(uid_t)]; uid_t uid; char uid_r_[PADR_(uid_t)];
-};
-struct cheriabi_stub_getuid_args {
-	register_t dummy;
 };
 struct cheriabi_stub_geteuid_args {
 	register_t dummy;
@@ -177,9 +168,6 @@ struct cheriabi_stub_kill_args {
 struct cheriabi_stub_getppid_args {
 	register_t dummy;
 };
-struct cheriabi_stub_dup_args {
-	char fd_l_[PADL_(u_int)]; u_int fd; char fd_r_[PADR_(u_int)];
-};
 struct cheriabi_stub_pipe_args {
 	register_t dummy;
 };
@@ -239,9 +227,6 @@ struct cheriabi_execve_args {
 	char fname_l_[PADL_(__capability char *)]; __capability char * fname; char fname_r_[PADR_(__capability char *)];
 	char argv_l_[PADL_(__capability void *)]; __capability void * argv; char argv_r_[PADR_(__capability void *)];
 	char envv_l_[PADL_(__capability void *)]; __capability void * envv; char envv_r_[PADR_(__capability void *)];
-};
-struct cheriabi_stub_umask_args {
-	char newmask_l_[PADL_(int)]; int newmask; char newmask_r_[PADR_(int)];
 };
 struct cheriabi_stub_chroot_args {
 	char path_l_[PADL_(__capability char *)]; __capability char * path; char path_r_[PADR_(__capability char *)];
@@ -1605,7 +1590,6 @@ int	cheriabi_stub_fork(struct thread *, struct cheriabi_stub_fork_args *);
 int	cheriabi_read(struct thread *, struct cheriabi_read_args *);
 int	cheriabi_write(struct thread *, struct cheriabi_write_args *);
 int	cheriabi_stub_open(struct thread *, struct cheriabi_stub_open_args *);
-int	cheriabi_stub_close(struct thread *, struct cheriabi_stub_close_args *);
 int	cheriabi_stub_wait4(struct thread *, struct cheriabi_stub_wait4_args *);
 int	cheriabi_stub_link(struct thread *, struct cheriabi_stub_link_args *);
 int	cheriabi_stub_unlink(struct thread *, struct cheriabi_stub_unlink_args *);
@@ -1614,11 +1598,9 @@ int	cheriabi_stub_fchdir(struct thread *, struct cheriabi_stub_fchdir_args *);
 int	cheriabi_stub_mknod(struct thread *, struct cheriabi_stub_mknod_args *);
 int	cheriabi_stub_chmod(struct thread *, struct cheriabi_stub_chmod_args *);
 int	cheriabi_stub_chown(struct thread *, struct cheriabi_stub_chown_args *);
-int	cheriabi_stub_getpid(struct thread *, struct cheriabi_stub_getpid_args *);
 int	cheriabi_stub_mount(struct thread *, struct cheriabi_stub_mount_args *);
 int	cheriabi_stub_unmount(struct thread *, struct cheriabi_stub_unmount_args *);
 int	cheriabi_stub_setuid(struct thread *, struct cheriabi_stub_setuid_args *);
-int	cheriabi_stub_getuid(struct thread *, struct cheriabi_stub_getuid_args *);
 int	cheriabi_stub_geteuid(struct thread *, struct cheriabi_stub_geteuid_args *);
 int	cheriabi_stub_ptrace(struct thread *, struct cheriabi_stub_ptrace_args *);
 int	cheriabi_recvmsg(struct thread *, struct cheriabi_recvmsg_args *);
@@ -1633,7 +1615,6 @@ int	cheriabi_stub_fchflags(struct thread *, struct cheriabi_stub_fchflags_args *
 int	cheriabi_stub_sync(struct thread *, struct cheriabi_stub_sync_args *);
 int	cheriabi_stub_kill(struct thread *, struct cheriabi_stub_kill_args *);
 int	cheriabi_stub_getppid(struct thread *, struct cheriabi_stub_getppid_args *);
-int	cheriabi_stub_dup(struct thread *, struct cheriabi_stub_dup_args *);
 int	cheriabi_stub_pipe(struct thread *, struct cheriabi_stub_pipe_args *);
 int	cheriabi_stub_getegid(struct thread *, struct cheriabi_stub_getegid_args *);
 int	cheriabi_stub_profil(struct thread *, struct cheriabi_stub_profil_args *);
@@ -1649,7 +1630,6 @@ int	cheriabi_stub_revoke(struct thread *, struct cheriabi_stub_revoke_args *);
 int	cheriabi_stub_symlink(struct thread *, struct cheriabi_stub_symlink_args *);
 int	cheriabi_stub_readlink(struct thread *, struct cheriabi_stub_readlink_args *);
 int	cheriabi_execve(struct thread *, struct cheriabi_execve_args *);
-int	cheriabi_stub_umask(struct thread *, struct cheriabi_stub_umask_args *);
 int	cheriabi_stub_chroot(struct thread *, struct cheriabi_stub_chroot_args *);
 int	cheriabi_stub_msync(struct thread *, struct cheriabi_stub_msync_args *);
 int	cheriabi_stub_vfork(struct thread *, struct cheriabi_stub_vfork_args *);
@@ -1991,7 +1971,6 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 #define	CHERIABI_SYS_AUE_cheriabi_read	AUE_READ
 #define	CHERIABI_SYS_AUE_cheriabi_write	AUE_WRITE
 #define	CHERIABI_SYS_AUE_open	AUE_OPEN_RWTC
-#define	CHERIABI_SYS_AUE_close	AUE_CLOSE
 #define	CHERIABI_SYS_AUE_wait4	AUE_WAIT4
 #define	CHERIABI_SYS_AUE_link	AUE_LINK
 #define	CHERIABI_SYS_AUE_unlink	AUE_UNLINK
@@ -2000,11 +1979,9 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 #define	CHERIABI_SYS_AUE_mknod	AUE_MKNOD
 #define	CHERIABI_SYS_AUE_chmod	AUE_CHMOD
 #define	CHERIABI_SYS_AUE_chown	AUE_CHOWN
-#define	CHERIABI_SYS_AUE_getpid	AUE_GETPID
 #define	CHERIABI_SYS_AUE_mount	AUE_MOUNT
 #define	CHERIABI_SYS_AUE_unmount	AUE_UMOUNT
 #define	CHERIABI_SYS_AUE_setuid	AUE_SETUID
-#define	CHERIABI_SYS_AUE_getuid	AUE_GETUID
 #define	CHERIABI_SYS_AUE_geteuid	AUE_GETEUID
 #define	CHERIABI_SYS_AUE_ptrace	AUE_PTRACE
 #define	CHERIABI_SYS_AUE_cheriabi_recvmsg	AUE_RECVMSG
@@ -2019,7 +1996,6 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 #define	CHERIABI_SYS_AUE_sync	AUE_SYNC
 #define	CHERIABI_SYS_AUE_kill	AUE_KILL
 #define	CHERIABI_SYS_AUE_getppid	AUE_GETPPID
-#define	CHERIABI_SYS_AUE_dup	AUE_DUP
 #define	CHERIABI_SYS_AUE_pipe	AUE_PIPE
 #define	CHERIABI_SYS_AUE_getegid	AUE_GETEGID
 #define	CHERIABI_SYS_AUE_profil	AUE_PROFILE
@@ -2035,7 +2011,6 @@ int	cheriabi_stub_numa_setaffinity(struct thread *, struct cheriabi_stub_numa_se
 #define	CHERIABI_SYS_AUE_symlink	AUE_SYMLINK
 #define	CHERIABI_SYS_AUE_readlink	AUE_READLINK
 #define	CHERIABI_SYS_AUE_cheriabi_execve	AUE_EXECVE
-#define	CHERIABI_SYS_AUE_umask	AUE_UMASK
 #define	CHERIABI_SYS_AUE_chroot	AUE_CHROOT
 #define	CHERIABI_SYS_AUE_msync	AUE_MSYNC
 #define	CHERIABI_SYS_AUE_vfork	AUE_VFORK

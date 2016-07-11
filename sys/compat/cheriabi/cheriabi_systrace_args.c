@@ -58,9 +58,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* cheriabi_stub_close */
+	/* close */
 	case 6: {
-		struct cheriabi_stub_close_args *p = params;
+		struct close_args *p = params;
 		iarg[0] = p->fd; /* int */
 		*n_args = 1;
 		break;
@@ -130,7 +130,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* cheriabi_stub_getpid */
+	/* getpid */
 	case 20: {
 		*n_args = 0;
 		break;
@@ -160,7 +160,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 1;
 		break;
 	}
-	/* cheriabi_stub_getuid */
+	/* getuid */
 	case 24: {
 		*n_args = 0;
 		break;
@@ -279,9 +279,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 0;
 		break;
 	}
-	/* cheriabi_stub_dup */
+	/* dup */
 	case 41: {
-		struct cheriabi_stub_dup_args *p = params;
+		struct dup_args *p = params;
 		uarg[0] = p->fd; /* u_int */
 		*n_args = 1;
 		break;
@@ -400,9 +400,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* cheriabi_stub_umask */
+	/* umask */
 	case 60: {
-		struct cheriabi_stub_umask_args *p = params;
+		struct umask_args *p = params;
 		iarg[0] = p->newmask; /* int */
 		*n_args = 1;
 		break;
@@ -3264,7 +3264,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* cheriabi_stub_close */
+	/* close */
 	case 6:
 		switch(ndx) {
 		case 0:
@@ -3381,7 +3381,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* cheriabi_stub_getpid */
+	/* getpid */
 	case 20:
 		break;
 	/* cheriabi_stub_mount */
@@ -3426,7 +3426,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* cheriabi_stub_getuid */
+	/* getuid */
 	case 24:
 		break;
 	/* cheriabi_stub_geteuid */
@@ -3614,7 +3614,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	/* cheriabi_stub_getppid */
 	case 39:
 		break;
-	/* cheriabi_stub_dup */
+	/* dup */
 	case 41:
 		switch(ndx) {
 		case 0:
@@ -3798,7 +3798,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* cheriabi_stub_umask */
+	/* umask */
 	case 60:
 		switch(ndx) {
 		case 0:
@@ -8513,7 +8513,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* cheriabi_stub_close */
+	/* close */
 	case 6:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
@@ -8558,7 +8558,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* cheriabi_stub_getpid */
+	/* getpid */
 	case 20:
 	/* cheriabi_stub_mount */
 	case 21:
@@ -8575,7 +8575,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* cheriabi_stub_getuid */
+	/* getuid */
 	case 24:
 	/* cheriabi_stub_geteuid */
 	case 25:
@@ -8638,7 +8638,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* cheriabi_stub_getppid */
 	case 39:
-	/* cheriabi_stub_dup */
+	/* dup */
 	case 41:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
@@ -8709,7 +8709,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* cheriabi_stub_umask */
+	/* umask */
 	case 60:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
