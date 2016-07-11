@@ -606,13 +606,21 @@ vn_rdwr(enum uio_rw rw, struct vnode *vp, void *base, int len, off_t offset,
 			args.args.vop_args.vp = vp;
 			error = vn_io_fault1(vp, &auio, &args, td);
 		} else if (rw == UIO_READ) {
+#ifdef CHERI_KERNEL
 			__UIOC2UIO_START(&auio, tmp_uio);
 			error = VOP_READ(vp, tmp_uio, ioflg, cred);
 			__UIOC2UIO_END(&auio, tmp_uio);
+#else
+			error = VOP_READ(vp, &auio, ioflg, cred);
+#endif
 		} else /* if (rw == UIO_WRITE) */ {
+#ifdef CHERI_KERNEL
 			__UIOC2UIO_START(&auio, tmp_uio);
 			error = VOP_WRITE(vp, tmp_uio, ioflg, cred);
 			__UIOC2UIO_END(&auio, tmp_uio);
+#else
+			error = VOP_WRITE(vp, &auio, ioflg, cred);
+#endif
 		}
 	}
 	if (aresid)
@@ -756,7 +764,7 @@ foffset_unlock(struct file *fp, off_t val, int flags)
 	mtx_unlock(mtxp);
 }
 
-
+#ifdef CHERI_KERNEL
 static void
 foffset_lock_uio_cap(struct file *fp, struct uio_c *uio, int flags)
 {
@@ -772,6 +780,7 @@ foffset_unlock_uio_cap(struct file *fp, struct uio_c *uio, int flags)
 	foffset_unlock_uio(fp, tmp_uio, flags);
 	__UIOC2UIO_END(uio, tmp_uio);
 }
+#endif
 
 void
 foffset_lock_uio(struct file *fp, struct uio *uio, int flags)
@@ -863,11 +872,15 @@ vn_read(fp, uio, active_cred, flags, td)
 	error = mac_vnode_check_read(active_cred, fp->f_cred, vp);
 	if (error == 0)
 #endif
+#ifdef CHERI_KERNEL
 		{
 			__UIOC2UIO_START(uio, tmp_uio);
 			error = VOP_READ(vp, tmp_uio, ioflag, fp->f_cred);
 			__UIOC2UIO_END(uio, tmp_uio);
 		}
+#else
+		error = VOP_READ(vp, uio, ioflag, fp->f_cred);
+#endif
 	fp->f_nextoff = uio->uio_offset;
 	VOP_UNLOCK(vp, 0);
 	if (error == 0 && advice == POSIX_FADV_NOREUSE &&
@@ -950,11 +963,15 @@ vn_write(fp, uio, active_cred, flags, td)
 	error = mac_vnode_check_write(active_cred, fp->f_cred, vp);
 	if (error == 0)
 #endif
+#ifdef CHERI_KERNEL
 		{
 			__UIOC2UIO_START(uio, tmp_uio);
 			error = VOP_WRITE(vp, tmp_uio, ioflag, fp->f_cred);
 			__UIOC2UIO_END(uio, tmp_uio);
 		}
+#else
+	error = VOP_WRITE(vp, uio, ioflag, fp->f_cred);
+#endif
 	fp->f_nextoff = uio->uio_offset;
 	VOP_UNLOCK(vp, 0);
 	if (vp->v_type != VCHR)
@@ -1027,6 +1044,7 @@ vn_io_fault_doio(args, uio, td)
 		return ((args->args.fop_args.doio)(args->args.fop_args.fp,
 	                uio, args->cred, args->flags, td));
 	case VN_IO_FAULT_VOP:
+#ifdef CHERI_KERNEL
 		uioc2uio(uio, &tmp_uio);
 		if (uio->uio_rw == UIO_READ) {
 			err = (VOP_READ(args->args.vop_args.vp, tmp_uio,
@@ -1040,6 +1058,15 @@ vn_io_fault_doio(args, uio, td)
 			__UIOC2UIO_END(uio, tmp_uio);
 			return err;
 		}
+#else		
+		if (uio->uio_rw == UIO_READ) {
+			return(VOP_READ(args->args.vop_args.vp, uio,
+					args->flags, args->cred));
+		} else if (uio->uio_rw == UIO_WRITE) {
+		        return (VOP_WRITE(args->args.vop_args.vp, uio,
+					  args->flags, args->cred));
+		}
+#endif
 		break;
 	}
 	panic("vn_io_fault_doio: unknown kind of io %d %d", args->kind,
