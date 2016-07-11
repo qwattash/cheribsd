@@ -872,6 +872,7 @@ copyinuio_cap(const struct iovec *iovp, u_int iovcnt, struct uio_c **uiop)
  *
  * XXXAM: this should replace cloneuio once it is replaced
  * everywhere
+ * there may be a bug here
  */
 struct uio_c *
 cloneuio_cap(struct uio_c *uiop)
@@ -879,8 +880,8 @@ cloneuio_cap(struct uio_c *uiop)
 	struct uio_c *uio;
 	int iovlen;
 
-	iovlen = uiop->uio_iovcnt * sizeof(struct iovec_c) + CHERICAP_SIZE;
-	uio = malloc(iovlen + sizeof *uio, M_IOV, M_WAITOK);
+	iovlen = uiop->uio_iovcnt * sizeof(struct iovec_c);
+	uio = malloc(iovlen + sizeof(*uio) + CHERICAP_SIZE, M_IOV, M_WAITOK);
 	*uio = *uiop;
 	uio->uio_iov = (struct iovec_c *)CAP_ALIGN(uio + 1);
 	cheri_bcopy(uiop->uio_iov, uio->uio_iov, iovlen);
