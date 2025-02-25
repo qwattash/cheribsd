@@ -384,7 +384,7 @@ CFLAGS.gcc+= -mabi=spe -mfloat-gprs=double -Wa,-me500
 .if ${MACHINE_CPUARCH} == "riscv"
 RISCV_MARCH=	rv64imafdc
 .if ${MACHINE_CPU:Mcheri}
-RISCV_MARCH:=	${RISCV_MARCH}xcheri-std-compat
+RISCV_MARCH:=	${RISCV_MARCH}zcherihybrid
 .endif
 
 .if ${MACHINE_ARCH:Mriscv*c*}

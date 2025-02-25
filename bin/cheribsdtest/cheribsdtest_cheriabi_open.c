@@ -234,7 +234,7 @@ CHERIBSDTEST(cheriabi_open_sentry, "Sealed path")
 	cheribsdtest_success();
 }
 
-#if !defined(__riscv_xcheri_std_compat)
+#ifdef __riscv_xcheri
 CHERIBSDTEST(cheriabi_open_sealed, "Sealed path")
 {
 	char *path, *sealed_path;
@@ -264,4 +264,4 @@ CHERIBSDTEST(cheriabi_open_sealed, "Sealed path")
 
 	cheribsdtest_success();
 }
-#endif /* !defined(__riscv_xcheri_std_compat) */
+#endif /* defined(__riscv_xcheri) */

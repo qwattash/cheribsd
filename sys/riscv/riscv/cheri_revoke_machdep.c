@@ -136,7 +136,7 @@ vm_do_cheri_revoke(int *res, const struct vm_cheri_revoke_cookie *crc,
 		 * mapping of physical memory.
 		 */
 again:
-#if defined(__CHERI_PURE_CAPABILITY__) || defined(__riscv_xcheri_std_compat)
+#if defined(__CHERI_PURE_CAPABILITY__) || !defined(__riscv_xcheri)
 		__asm__ __volatile__ (
 #if !defined(__CHERI_PURE_CAPABILITY__)
 			".option push"

@@ -180,7 +180,7 @@ CFLAGS+=	-mabi=aapcs
 .if ${MACHINE_CPUARCH} == "riscv"
 RISCV_MARCH=	rv64imafdc
 .if ${MACHINE_CPU:Mcheri}
-RISCV_MARCH:=	${RISCV_MARCH}xcheri-std-compat
+RISCV_MARCH:=	${RISCV_MARCH}zcherihybrid
 .endif
 
 RISCV_ABI=	lp64

@@ -210,7 +210,7 @@ ptrace_derive_cap(struct proc *p, uintcap_t in, uintcap_t *out)
 	if (cheri_ptrace_caps >= 2) {
 		/* If forging is allowed, derive from the userspace root. */
 		cap = cheri_buildcap(userspace_root_cap, in);
-#if !defined(__riscv_xcheri_std_compat)
+#ifdef __riscv_xcheri
 		void * __capability sealcap =
 		    cheri_copytype(userspace_root_sealcap, in);
 		cap = cheri_condseal(cap, sealcap);
