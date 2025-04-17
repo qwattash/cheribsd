@@ -2663,7 +2663,13 @@ sysctl_kern_proc_c18n_compartments(SYSCTL_HANDLER_ARGS)
 		rccp = (char * __capability)info.comparts +
 		    i * info.comparts_entry_size;
 		if (!cheri_can_access(rccp,
+#ifdef CHERI_PERM_LOAD_CAP
 		    CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP,
+#elif defined(CHERI_PERM_CAP)
+		    CHERI_PERM_LOAD | CHERI_PERM_CAP,
+#else
+		    CHERI_PERM_LOAD,
+#endif
 		    (__cheri_addr ptraddr_t)rccp, sizeof(rcc))) {
 			error = EPROT;
 			goto out;
