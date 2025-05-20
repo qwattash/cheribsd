@@ -85,7 +85,6 @@
  * CLEAR_ON_ALLOC: Zero allocated regions as they are allocated (for
  *   non-calloc allocation functions).
  * CLEAR_ON_RETURN: Zero allocated regions as they come out of quarantine.
- * CLEAR_ON_FREE: Zero allocated regions as they are given to us.
  * REVOKE_ON_FREE: Perform revocation on free rather than during
  *   allocation routines.
  *
@@ -138,6 +137,10 @@ extern void snmalloc_flush_message_queue(void);
 	"_RUNTIME_BOUND_CHERI_POINTERS"
 #define	MALLOC_NOBOUND_CHERI_POINTERS \
 	"_RUNTIME_NOBOUND_CHERI_POINTERS"
+#define	MALLOC_ZERO_FREED_MEMORY \
+	"_RUNTIME_ZERO_FREED_MEMORY"
+#define	MALLOC_NOZERO_FREED_MEMORY \
+	"_RUNTIME_NOZERO_FREED_MEMORY"
 
 #define	MALLOC_QUARANTINE_DENOMINATOR_ENV \
 	"_RUNTIME_QUARANTINE_DENOMINATOR"
@@ -318,6 +321,7 @@ static bool revoke_async = false;
 static bool bound_pointers = false;
 static bool abort_on_validation_failure = true;
 static bool mrs_initialized = false;
+static bool zero_freed_memory = false;
 
 static unsigned int quarantine_denominator = QUARANTINE_DENOMINATOR;
 static unsigned int quarantine_numerator = QUARANTINE_NUMERATOR;
@@ -1406,6 +1410,11 @@ mrs_init_impl_locked(void)
 			bound_pointers = true;
 		else if (getenv(MALLOC_NOBOUND_CHERI_POINTERS) != NULL)
 			bound_pointers = false;
+
+		if (getenv(MALLOC_ZERO_FREED_MEMORY) != NULL)
+			zero_freed_memory = true;
+		else if (getenv(MALLOC_NOZERO_FREED_MEMORY) != NULL)
+			zero_freed_memory = false;
 	}
 	if (!quarantining)
 		goto nosys;
@@ -1766,9 +1775,8 @@ mrs_free(void *ptr)
 	}
 #endif /* !OFFLOAD_QUARANTINE */
 
-#ifdef CLEAR_ON_FREE
-	bzero(cheri_setoffset(ptr, 0), cheri_getlen(ptr));
-#endif
+	if (zero_freed_memory)
+		bzero(cheri_setoffset(ptr, 0), cheri_getlen(ptr));
 
 	mrs_lock(&app_quarantine_lock);
 	quarantine_insert(app_quarantine, ins, cheri_getlen(ins));
