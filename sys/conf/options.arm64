@@ -25,8 +25,12 @@ CHERI_CAPREVOKE_CLEARTAGS	opt_global.h
 CHERI_CAPREVOKE_CLOADTAGS	opt_global.h
 CHERI_CAPREVOKE_FAST_COPYIN	opt_global.h
 CHERI_CAPREVOKE_STATS		opt_global.h
-# RV64Y revoker state machine variants
+# RV64Y revoker state machine variants, mutually exclusive
+# Do not transition from cap-dirty to clean
 CHERI_CAPREVOKE_NO_CLEAN	opt_global.h
+# Allow 2-scan transitions from cap-dirty to clean without
+# using the hw cap-dirty PTE state
+CHERI_CAPREVOKE_TWOSTAGE_CLEAN	opt_global.h
 
 # EFI Runtime services support
 EFIRT				opt_efirt.h

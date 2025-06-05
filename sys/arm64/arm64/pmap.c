@@ -6520,7 +6520,7 @@ pmap_caploadgen_update(pmap_t pmap, vm_offset_t va, vm_page_t *mp, int flags)
 	pd_entry_t *l2, l2e;
 #endif
 	pt_entry_t *pte, tpte;
-#ifndef CHERI_CAPREVOKE_NO_CLEAN
+#if !defined(CHERI_CAPREVOKE_NO_CLEAN) && !defined(CHERI_CAPREVOKE_TWOSTAGE_CLEAN)
 	pt_entry_t exppte;
 #endif
 	vm_page_t m;
@@ -6611,6 +6611,66 @@ retry:
 
 #ifndef CHERI_CAPREVOKE_NO_CLEAN
 		if (!(flags & PMAP_CAPLOADGEN_HASCAPS)) {
+#ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
+			/*
+			 * We didn't see a capability on this page.
+			 * This can only be done for pages that have no aliases
+			 * and we have xbusied.
+			 */
+			if ((flags & PMAP_CAPLOADGEN_NONEWMAPS) &&
+			    !(flags & PMAP_CAPLOADGEN_CLEANED)) {
+				/*
+				 * Observed clean page for the first time.
+				 * CAP-DIRTY -> CLEAN and request a rescan
+				 * to ensure that we have not raced with other
+				 * capability writes.
+				 */
+				struct rwlock *lock;
+
+				KASSERT(tpte & ATTR_SC,
+					("Cleaning page but !ATTR_SC?"));
+				lock = VM_PAGE_TO_PV_LIST_LOCK(m);
+				rw_rlock(lock);
+				if (TAILQ_NEXT(TAILQ_FIRST(&m->md.pv_list),
+				    pv_next) == NULL) {
+					/* No aliasing mappings, CLEAN */
+					vm_page_aflag_clear(m, PGA_CAPDIRTY);
+					pmap_clear_bits(pte, ATTR_SC |
+					    ATTR_CDBM | ATTR_LC_MASK);
+					pmap_s1_invalidate_page(pmap, va, true);
+
+					res = PMAP_CAPLOADGEN_CLEANING;
+				}
+				rw_runlock(lock);
+			} else if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
+				/*
+				 * Second scan is complete and we still did not
+				 * find any capabilities, complete move to IDLE
+				 * if the page is still CAP-CLEAN.
+				 *
+				 * Note that there may aliases to the page now,
+				 * but we don't care because we have the page
+				 * xbusied and new writeable mappings are
+				 * not allowed.
+				 *
+				 * Now a page can only have become CAPDIRTY via
+				 * vm_fault, which must have set both CAPDIRTY
+				 * and CDBM. Modifications to the pmap can not
+				 * happen untile we unlock the pmap
+				 * (XXX is this true?).
+				 */
+				vm_page_astate_t mas = vm_page_astate_load(m);
+
+				if (!(mas.flags & PGA_CAPDIRTY) && !(tpte & ATTR_CDBM)) {
+					counter_u64_add(cheri_became_cap_clean, 1);
+					vm_page_aflag_clear(m, PGA_CAPSTORE);
+					PMAP_UNLOCK(pmap);
+					// pmap_caploadgen_test_all_clean(m);
+					m = NULL;
+					goto out_unlocked;
+				}
+			}
+#else /* !defined(CHERI_CAPREVOKE_TWOSTAGE_CLEAN) */
 			/*
 			 * We didn't see a capability on this page; step this
 			 * PTE closer to being cap-clean.
@@ -6651,7 +6711,6 @@ retry:
 				 */
 				exppte = tpte;
 				pmap_fcmpset(pte, &exppte, exppte & ~ATTR_CDBM);
-
 			} else if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
 				/* No new mappings possible */
 				vm_page_astate_t mas = vm_page_astate_load(m);
@@ -6687,6 +6746,7 @@ retry:
 					goto out_unlocked;
 				}
 			}
+#endif /* !defined(CHERI_CAPREVOKE_TWOSTAGE_CLEAN) */
 		} else {
 			/*
 			 * Page has caps; may as well mark it dirty if we're
