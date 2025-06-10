@@ -62,6 +62,14 @@ typedef	uint64_t	pt_entry_t;		/* page table entry */
 #define	ATTR_LC_GEN1		(3UL << 61)
 #define	ATTR_SC			(1UL << 60)
 #define	ATTR_CDBM		(1UL << 59)
+
+/* Simplified 2-bit PTE states */
+#define	ATTR_XREVOKE_LC_GEN0		(ATTR_LC_GEN0 | ATTR_SC | ATTR_CDBM)
+#define	ATTR_XREVOKE_LC_GEN1		(ATTR_LC_GEN1 | ATTR_SC | ATTR_CDBM)
+#define	ATTR_XREVOKE_CLEAN		(ATTR_LC_DISABLED)
+#define	ATTR_XREVOKE_DIRTIABLE0		(ATTR_LC_GEN0 | ATTR_CDBM)
+#define	ATTR_XREVOKE_DIRTIABLE1		(ATTR_LC_GEN1 | ATTR_CDBM)
+#define	ATTR_XREVOKE_MASK		(ATTR_LC_MASK | ATTR_SC | ATTR_CDBM)
 #endif
 
 #define BASE_MASK		~ATTR_MASK
