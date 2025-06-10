@@ -130,10 +130,15 @@ SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, wired_count, CTLFLAG_RD,
     "Count wired page scans");
 
 #ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
-COUNTER_U64_DEFINE_EARLY(cheri_clean_rescan);
-SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, clean_rescan, CTLFLAG_RD,
-    &cheri_clean_rescan,
-    "Count rescans due to two-stage cap-clean transition");
+COUNTER_U64_DEFINE_EARLY(cheri_second_stage_clean);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, second_stage_clean, CTLFLAG_RD,
+    &cheri_second_stage_clean,
+    "Count attempts to clean a page by triggering a secondary scan");
+
+COUNTER_U64_DEFINE_EARLY(cheri_second_stage_dirty);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, second_stage_dirty, CTLFLAG_RD,
+    &cheri_second_stage_dirty,
+    "Count failed attempts to clean a page due to the page being dirty");
 #endif
 
 /***************************** KERNEL THREADS ***************************/
@@ -490,7 +495,7 @@ again:
 			res = VM_CHERI_REVOKE_FAULT_RESOLVED;
 			goto out;
 		}
-		counter_u64_add(cheri_clean_rescan, 1);
+		counter_u64_add(cheri_second_stage_clean, 1);
 		clean_rescan = true;
 #endif
 	}
@@ -938,7 +943,7 @@ ok:
 			 * the revoker.
 			 */
 			if (!clean_rescan) {
-				counter_u64_add(cheri_clean_rescan, 1);
+				counter_u64_add(cheri_second_stage_clean, 1);
 				clean_rescan = true;
 				goto visit_restart;
 			}
