@@ -550,6 +550,25 @@ static void pmap_bti_deassign_all(pmap_t pmap);
 /* Inline functions */
 /********************/
 
+#if defined(CHERI_CAPREVOKE) && defined(KTR)
+static inline void
+pmap_ktr_caprevoke_update(const char *op, pmap_t pmap, vm_offset_t va,
+    vm_page_t m, pt_entry_t pte)
+{
+	char ident[48];
+
+	if (pmap == kernel_pmap)
+		return;
+
+	snprintf(ident, 48, "%p/%lx", pmap, va);
+	KTR_STATE2(KTR_CAPREVOKE, "pte", ident, op,
+	    "pa: %#lx", VM_PAGE_TO_PHYS(m), "LC|SC|CDBM: %x",
+	    (pte & (ATTR_LC_MASK | ATTR_SC | ATTR_CDBM)) >> 59);
+}
+#else
+#define pmap_ktr_caprevoke_update(pmap, va, pte)
+#endif
+
 static __inline void
 pagecopy(void *s, void *d)
 {
@@ -5384,6 +5403,8 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	}
 
 	CTR2(KTR_PMAP, "pmap_enter: %.16lx -> %.16lx", va, pa);
+        pmap_ktr_caprevoke_update("pmap_enter", pmap, va, m, new_l3);
+
 
 	lock = NULL;
 	PMAP_LOCK(pmap);
@@ -6660,6 +6681,9 @@ retry:
 					pmap_s1_invalidate_page(pmap, va, true);
 					vm_page_aflag_clear(m,
 					    PGA_CAPDIRTY | PGA_CAPSTORE);
+					pmap_ktr_caprevoke_update(
+					    "clg CLEANED -> page IDLE",
+					    pmap, va, m, pmap_load(pte));
 					counter_u64_add(cheri_became_cap_clean, 1);
 					PMAP_UNLOCK(pmap);
 					m = NULL;
@@ -6669,6 +6693,8 @@ retry:
 				// XXX should not be an assertion
 				KASSERT(exppte & ATTR_S1_AP_RW_BIT,
 				    ("Spurious pte update failure?"));
+				pmap_ktr_caprevoke_update("clg CLEANED -> DIRTY",
+				    pmap, va, m, pmap_load(pte));
 				counter_u64_add(cheri_second_stage_dirty, 1);
 			} else if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
 				/*
@@ -6720,6 +6746,8 @@ retry:
 				}
 				// else counter_u64_add(cheri_second_stage_ro_clean, 1);
 
+				pmap_ktr_caprevoke_update("clg CLEANING", pmap,
+				    va, m, pmap_load(pte));
 				res = PMAP_CAPLOADGEN_CLEANING;
 				PMAP_UNLOCK(pmap);
 				mp = NULL;
@@ -6736,6 +6764,8 @@ retry:
 			if ((tpte & ATTR_CDBM) && !(tpte & ATTR_SC)) {
 				pmap_set_bits(pte, ATTR_SC);
 			}
+			pmap_ktr_caprevoke_update("clg DIRTY", pmap, va,
+			    m, pmap_load(pte));
 		}
 
 clean_bail:
@@ -6752,6 +6782,8 @@ clean_bail:
 		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
 			pmap_s1_invalidate_page(pmap, va, true);
 		}
+		pmap_ktr_caprevoke_update("CLG", pmap, va, m, pmap_load(pte));
+		m = NULL;
 	} else if (!(vm_page_astate_load(m).flags & PGA_CAPSTORE)) {
 		KASSERT(!(tpte & ATTR_CDBM), ("!PGA_CAPSTORE but CDBM?"));
 		KASSERT(!(tpte & ATTR_SC), ("!PGA_CAPSTORE but SC?"));
@@ -6767,6 +6799,8 @@ clean_bail:
 		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
 			pmap_s1_invalidate_page(pmap, va, true);
 		}
+		pmap_ktr_caprevoke_update("caploadgen !CAPSTORE CLG", pmap, va,
+		    m, pmap_load(pte));
 
 		m = NULL;
 		res = PMAP_CAPLOADGEN_CLEAN;
@@ -6963,6 +6997,9 @@ retry:
 				 * scan the page again anyway.
 				 */
 				pmap_clear_bits(pte, ATTR_SC);
+				pmap_ktr_caprevoke_update(
+				    "caploadgen DIRTY->DIRTIABLE", pmap, va, m,
+				    pmap_load(pte));
 			} else if (tpte & ATTR_CDBM) {
 				/*
 				 * PTE CAP-DIRTYABLE -> CAP-CLEAN
@@ -6990,6 +7027,9 @@ retry:
 				 */
 				exppte = tpte;
 				pmap_fcmpset(pte, &exppte, exppte & ~ATTR_CDBM);
+				pmap_ktr_caprevoke_update(
+				    "caploadgen DIRTIABLE->CLEAN", pmap, va, m,
+				    exppte);
 			} else if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
 				/* No new mappings possible */
 				vm_page_astate_t mas = vm_page_astate_load(m);
@@ -7036,6 +7076,8 @@ retry:
 			if ((tpte & ATTR_CDBM) && !(tpte & ATTR_SC)) {
 				pmap_set_bits(pte, ATTR_SC);
 			}
+			pmap_ktr_caprevoke_update("caploadgen DIRTY", pmap, va,
+			    m, pmap_load(pte));
 		}
 #endif /* CHERI_CAPREVOKE_NO_CLEAN */
 
@@ -7052,6 +7094,8 @@ retry:
 		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
 			pmap_s1_invalidate_page(pmap, va, true);
 		}
+		pmap_ktr_caprevoke_update("caploadgen CLG", pmap, va, m,
+		    pmap_load(pte));
 		m = NULL;
 	} else if (!(vm_page_astate_load(m).flags & PGA_CAPSTORE)) {
 		KASSERT(!(tpte & ATTR_CDBM), ("!PGA_CAPSTORE but CDBM?"));
@@ -7068,6 +7112,8 @@ retry:
 		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
 			pmap_s1_invalidate_page(pmap, va, true);
 		}
+		pmap_ktr_caprevoke_update("caploadgen !CAPSTORE CLG", pmap, va,
+		    m, pmap_load(pte));
 
 		m = NULL;
 		res = PMAP_CAPLOADGEN_CLEAN;
