@@ -555,18 +555,17 @@ static inline void
 pmap_ktr_caprevoke_update(const char *op, pmap_t pmap, vm_offset_t va,
     vm_page_t m, pt_entry_t pte)
 {
-	char ident[48];
-
 	if (pmap == kernel_pmap)
 		return;
 
-	snprintf(ident, 48, "%p/%lx", pmap, va);
-	KTR_STATE2(KTR_CAPREVOKE, "pte", ident, op,
-	    "pa: %#lx", VM_PAGE_TO_PHYS(m), "LC|SC|CDBM: %x",
-	    (pte & (ATTR_LC_MASK | ATTR_SC | ATTR_CDBM)) >> 59);
+	CTR5(KTR_CAPREVOKE, "%p/%lx %s -- pa %#lx pte %#lx", pmap, va, op,
+	    VM_PAGE_TO_PHYS(m), pte);
+	CTR5(KTR_CAPREVOKE, "LC: %lx SC: %d CDBM: %d RW: %d DBM: %d",
+	    (pte & ATTR_LC_MASK) >> 59, !!(pte & ATTR_SC), !!(pte & ATTR_CDBM),
+	    !!(pte & ATTR_S1_AP_RW_BIT), !!(pte & ATTR_DBM));
 }
 #else
-#define pmap_ktr_caprevoke_update(pmap, va, pte)
+#define pmap_ktr_caprevoke_update(op, pmap, va, m, pte)
 #endif
 
 static __inline void
@@ -5403,7 +5402,7 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	}
 
 	CTR2(KTR_PMAP, "pmap_enter: %.16lx -> %.16lx", va, pa);
-        pmap_ktr_caprevoke_update("pmap_enter", pmap, va, m, new_l3);
+        pmap_ktr_caprevoke_update("ENTER", pmap, va, m, new_l3);
 
 
 	lock = NULL;
