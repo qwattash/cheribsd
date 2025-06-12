@@ -6704,12 +6704,12 @@ retry:
 				 * Sync the dirty state to the MI layer and
 				 * drop to data-clean.
 				 *
-				 * Note that the pte should have SC=1, we
-				 * should never reach here with a DIRTIABLE or
-				 * CLEAN page.
+				 * Note that the pte should have at least
+				 * CDBM=1, depending whether we observed a
+				 * capability store since pmap_enter().
 				 */
-				KASSERT(tpte & ATTR_SC,
-				    ("Cleaning page but !ATTR_SC?"));
+				KASSERT(tpte & (ATTR_SC | ATTR_CDBM),
+				    ("Cleaning page but !ATTR_SC | !ATTR_CDBM?"));
 				vm_page_assert_xbusied(m);
 
 				/*
@@ -6749,8 +6749,8 @@ retry:
 				    va, m, pmap_load(pte));
 				res = PMAP_CAPLOADGEN_CLEANING;
 				PMAP_UNLOCK(pmap);
-				mp = NULL;
-				goto out_unlocked;
+				m = NULL;
+				goto out_cleaning;
 			}
 		} else {
 			/*
@@ -6874,6 +6874,7 @@ out_unlocked:
 			vm_page_unwire_in_situ(*mp);
 		}
 	}
+out_cleaning:
 	*mp = m;
 
 	return res;
