@@ -6441,7 +6441,10 @@ pmap_caploadgen_next(pmap_t pmap)
 }
 
 extern counter_u64_t cheri_became_cap_clean;
+#ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
 extern counter_u64_t cheri_second_stage_dirty;
+extern counter_u64_t cheri_second_stage_alias;
+#endif
 
 /* XREF pmap_page_test_mappings */
 static void
@@ -6723,6 +6726,7 @@ retry:
 				if (TAILQ_NEXT(TAILQ_FIRST(&m->md.pv_list),
 				    pv_next) != NULL) {
 					rw_runlock(lock);
+					counter_u64_add(cheri_second_stage_alias, 1);
 					goto clean_bail;
 				}
 				rw_runlock(lock);
