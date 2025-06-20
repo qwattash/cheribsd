@@ -38,6 +38,7 @@
 #include <sys/counter.h>
 #include <sys/kernel.h>
 #include <sys/kthread.h>
+#include <sys/ktr.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mutex.h>
@@ -1176,6 +1177,8 @@ vm_cheri_revoke_pass_locked(struct vmspace *vm,
 
 	vm_map_lock_downgrade(map);
 
+	CTR1(KTR_CAPREVOKE, "revoke-pass %p start", &vm->vm_map);
+
 	/*
 	 * Pinning the revoker helps improve determinism and so is useful for
 	 * benchmarking, but might be a liability under load.
@@ -1238,6 +1241,7 @@ out:
 		sched_unpin();
 
 	vm_map_lock(crc->map);
+	CTR2(KTR_CAPREVOKE, "revoke-pass %p done %d", &vm->vm_map, res);
 
 	return (res);
 }

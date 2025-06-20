@@ -43,6 +43,7 @@
 #include <cheri/cheric.h>
 
 #include <sys/lock.h>
+#include <sys/ktr.h>
 #include <sys/mutex.h>
 
 #include <vm/vm.h>
@@ -586,6 +587,8 @@ fast_out:
 	    myst == CHERI_REVOKE_ST_CLOSING,
 	    ("Bad target state in revoker."));
 
+	CTR3(KTR_CAPREVOKE, "%d/%d epoch %d barrier phase", td->td_proc->p_pid,
+	    td->td_tid, crepochs.dequeue);
 	/* Begin barrier phase! */
 
 	{
@@ -692,6 +695,8 @@ fast_out:
 	PROC_UNLOCK(td->td_proc);
 
 	/* Post barrier phase! */
+	CTR3(KTR_CAPREVOKE, "%d/%d epoch %d post barrier phase",
+	    td->td_proc->p_pid, td->td_tid, crepochs.dequeue);
 
 	/*
 	 * If we came in with no epoch open, we have just opened one.
@@ -754,6 +759,8 @@ post_revoke_pass:
 	/* Broadcast here: some sleepers may be able to take the fast out */
 	cv_broadcast(&vmm->vm_cheri_revoke_cv);
 
+	CTR4(KTR_CAPREVOKE, "%d/%d epoch %d fini %d",
+	    td->td_proc->p_pid, td->td_tid, crepochs.dequeue, res);
 	return (cheri_revoke_fini(crsi, vm_mmap_to_errno(res), crstp,
 	    &crepochs));
 }

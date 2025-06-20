@@ -421,6 +421,8 @@ vm_fault_cheri_revoke(struct faultstate *fs, vm_page_t m, bool canwrite)
 		counter_u64_add(cheri_scan_ro, 1);
 		hascaps = vm_cheri_revoke_page_ro(&crc, m);
 	}
+        CTR3(KTR_CAPREVOKE, "revoke-fault %p m=%lx hascaps=%d", fs->map,
+             VM_PAGE_TO_PHYS(m), hascaps);
 
 	/*
 	 * TODO: Well, this is kind of awkward.  We should, on the load side, be
