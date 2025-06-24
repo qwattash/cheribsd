@@ -398,3 +398,61 @@ vm_cheri_revoke_page_ro(const struct vm_cheri_revoke_cookie *crc, vm_page_t m)
 
 	return (res);
 }
+
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+static inline int
+vm_cheri_revoke_check_page_clean_adapt(int *res,
+    const struct vm_cheri_revoke_cookie *vmcrc,
+    const uint8_t * __capability crshadow, vm_cheri_revoke_test_fn ctp,
+    uintcap_t * __capability cutp, uintcap_t cut, vm_offset_t start,
+    vm_offset_t end)
+{
+	(void)cutp;
+	(void)crshadow;
+
+	/* If the thing has no permissions, we don't need to scan it later */
+	if ((cheri_gettag(cut) == 0) || (cheri_getperm(cut) == 0))
+		return (0);
+
+	*res |= VM_CHERI_REVOKE_PAGE_HASCAPS;
+
+	return (0);
+}
+
+/*
+ * Like vm_cheri_revoke_page_ro, but only checks for cap-cleanliness.
+ *
+ * VM_CHERI_REVOKE_PAGE_HASCAPS means that we so at least one
+ * permission-bearing capability in this page.
+ */
+int
+vm_cheri_revoke_check_page_clean(const struct vm_cheri_revoke_cookie *crc,
+    vm_page_t m)
+{
+#ifdef CHERI_CAPREVOKE_STATS
+	uint32_t cyc_start = get_cyclecount();
+	CHERI_REVOKE_STATS_FOR(crst, crc);
+#endif
+
+	vm_offset_t mva;
+	vm_offset_t mve;
+	uintcap_t * __capability mvu;
+	void * __capability kdc = swap_restore_cap;
+	int res = 0;
+
+	mva = PHYS_TO_DMAP(VM_PAGE_TO_PHYS(m));
+	mve = mva + pagesizes[0];
+
+	mvu = cheri_setbounds(cheri_setaddress(kdc, mva), pagesizes[0]);
+
+	res = vm_cheri_revoke_page_iter(crc,
+	    vm_cheri_revoke_check_page_clean_adapt, mvu, mve);
+
+#ifdef CHERI_CAPREVOKE_STATS
+	uint32_t cyc_end = get_cyclecount();
+	crst->page_scan_cycles += cyc_end - cyc_start;
+#endif
+
+	return (res);
+}
+#endif /* CHERI_CAPREVOKE_BATCH_CLEAN */

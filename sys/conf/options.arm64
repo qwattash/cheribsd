@@ -31,6 +31,9 @@ CHERI_CAPREVOKE_NO_CLEAN	opt_global.h
 # Allow 2-scan transitions from cap-dirty to clean without
 # using the hw cap-dirty PTE state
 CHERI_CAPREVOKE_TWOSTAGE_CLEAN	opt_global.h
+# Allow 2-stage transitions from cap-dirty to clean by
+# batching the scan during the stop-the-world phase
+CHERI_CAPREVOKE_BATCH_CLEAN	opt_global.h
 
 # EFI Runtime services support
 EFIRT				opt_efirt.h

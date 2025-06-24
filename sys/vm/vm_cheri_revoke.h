@@ -118,6 +118,11 @@ void vm_cheri_revoke_publish_epochs(
 /*  Revoke a single capability if needed */
 void vm_cheri_revoke_cap(const struct vm_cheri_revoke_cookie *, uintcap_t *);
 
+/* Batch cap-clean page marking */
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+void vm_cheri_revoke_clean_pages(struct vmspace *);
+#endif
+
 /***************************** KERNEL MD LAYER ******************************/
 
 int vm_cheri_revoke_test(const struct vm_cheri_revoke_cookie *, uintcap_t);
@@ -142,6 +147,10 @@ int vm_cheri_revoke_page_rw(
     const struct vm_cheri_revoke_cookie *c, struct vm_page *m);
 int vm_cheri_revoke_page_ro(
     const struct vm_cheri_revoke_cookie *c, struct vm_page *m);
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+int vm_cheri_revoke_check_page_clean(
+    const struct vm_cheri_revoke_cookie *c, struct vm_page *m);
+#endif
 
 /* callback from MD layer */
 enum vm_cheri_revoke_fault_res {

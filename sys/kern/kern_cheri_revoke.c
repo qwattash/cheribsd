@@ -653,6 +653,11 @@ fast_out:
 	/* Per-process kernel hoarders */
 	cheri_revoke_hoarders(td->td_proc, &vmcrc);
 
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+        /* Batch mark cap-clean pages. */
+        pmap_cheri_revoke_batch_clean(&vmcrc, vmspace_pmap(vm));
+#endif
+
 	KASSERT(myst == CHERI_REVOKE_ST_INITING ||
 	    myst == CHERI_REVOKE_ST_CLOSING,
 	    ("unexpected state %d in revoker", myst));

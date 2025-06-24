@@ -90,6 +90,9 @@ typedef struct pmap_statistics *pmap_statistics_t;
 #ifdef _KERNEL
 #include <sys/_cpuset.h>
 struct thread;
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+struct vm_cheri_revoke_cookie;
+#endif
 
 /*
  * Updates to kernel_vm_end are synchronized by the kernel_map's system mutex.
@@ -147,6 +150,10 @@ enum pmap_caploadgen_res pmap_caploadgen_update(pmap_t, vm_offset_t,
 		    vm_page_t *, int flags);
 void		 pmap_caploadgen_next(pmap_t pmap);
 void		 pmap_assert_consistent_clg(pmap_t, vm_offset_t);
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+void		 pmap_cheri_revoke_batch_clean(
+		    const struct vm_cheri_revoke_cookie *, pmap_t);
+#endif
 #endif
 void		 pmap_clear_modify(vm_page_t m);
 void		 pmap_copy(pmap_t, pmap_t, vm_offset_t, vm_size_t, vm_offset_t);

@@ -145,6 +145,9 @@
 #include <vm/vm_reserv.h>
 #include <vm/vm_dumpset.h>
 #include <vm/uma.h>
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+#include <vm/vm_cheri_revoke.h>
+#endif
 
 #include <machine/asan.h>
 #include <machine/machdep.h>
@@ -198,7 +201,11 @@ struct pmap_large_md_page {
 	struct md_page  pv_page;
 	/* Pad to a power of 2, see pmap_init_pv_table(). */
 #ifdef __CHERI_PURE_CAPABILITY__
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+	int		pv_pad[28];
+#else
 	int		pv_pad[4];
+#endif
 #else
 	int		pv_pad[2];
 #endif
@@ -1723,7 +1730,11 @@ pmap_init_pv_table(void)
 	 * different power of two, the code below needs to be revisited.
 	 */
 #ifdef __CHERI_PURE_CAPABILITY__
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+	CTASSERT((sizeof(*pvd) == 256));
+#else
 	CTASSERT((sizeof(*pvd) == 128));
+#endif
 #else
 	CTASSERT((sizeof(*pvd) == 64));
 #endif
@@ -4180,6 +4191,20 @@ pmap_remove_l3_range(pmap_t pmap, pd_entry_t l2e, vm_offset_t sva,
 				if (TAILQ_EMPTY(&pvh->pv_list))
 					vm_page_aflag_clear(m, PGA_WRITEABLE);
 			}
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+			/* Drop from revoker clean list */
+			/*
+			 * XXX-AM: hack, check tag on tailq prev element to detect
+			 * enqueued pages. Tailq may trash the tqe_prev/next pointers
+			 * with (-1) when INVARIANTS are enabled.
+			 * We should probably use an m->flags or aflag for this as
+			 * this only works for the purecap kernels.
+			 */
+			if (cheri_gettag(m->md.revoker_clean_next.tqe_prev)) {
+				TAILQ_REMOVE(&pmap->pm_revoker_clean_queue, m,
+				    md.revoker_clean_next);
+			}
+#endif
 		}
 		if (l3pg != NULL && pmap_unwire_l3(pmap, sva, l3pg, free)) {
 			/*
@@ -6445,6 +6470,13 @@ extern counter_u64_t cheri_became_cap_clean;
 extern counter_u64_t cheri_second_stage_dirty;
 extern counter_u64_t cheri_second_stage_alias;
 #endif
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+extern counter_u64_t cheri_batch_enqueue;
+extern counter_u64_t cheri_batch_dirty;
+extern counter_u64_t cheri_batch_skip_alias;
+extern counter_u64_t cheri_batch_skip_failxbusy;
+extern counter_u64_t cheri_batch_late_skip_alias;
+#endif
 
 /* XREF pmap_page_test_mappings */
 static void
@@ -6886,7 +6918,350 @@ out_cleaning:
 
 #elif defined(CHERI_CAPREVOKE_BATCH_CLEAN)
 
-#error "TODO"
+/*
+ * Drain the pm_revoker_clean_queue.
+ * Try to clean all pages in the clean queue.
+ * This is only possible if the pages are still mapped, do not have
+ * aliases and can be xbusied.
+ * The caller must ensure that no concurrent writes to the page are possible,
+ * which is true during the stop-the-world-phase.
+ */
+void
+pmap_cheri_revoke_batch_clean(const struct vm_cheri_revoke_cookie *crc,
+    pmap_t pmap)
+{
+	vm_page_t m;
+	int vres;
+
+	CTR1(KTR_CAPREVOKE, "batch-clean %p start", crc->map);
+
+	PMAP_LOCK(pmap);
+
+	while (!TAILQ_EMPTY(&pmap->pm_revoker_clean_queue)) {
+		struct rwlock *lock = NULL;
+		pv_entry_t pv;
+		pt_entry_t *pte, tpte;
+		int lvl;
+
+		m = TAILQ_FIRST(&pmap->pm_revoker_clean_queue);
+		TAILQ_REMOVE_HEAD(&pmap->pm_revoker_clean_queue,
+		    md.revoker_clean_next);
+
+		if (!vm_page_tryxbusy(m)) {
+			counter_u64_add(cheri_batch_skip_failxbusy, 1);
+			continue;
+		}
+	       
+		lock = VM_PAGE_TO_PV_LIST_LOCK(m);
+		rw_rlock(lock);
+		pv = TAILQ_FIRST(&m->md.pv_list);
+		if (TAILQ_NEXT(pv, pv_next) != NULL || PV_PMAP(pv) != pmap) {
+			counter_u64_add(cheri_batch_late_skip_alias, 1);
+			rw_runlock(lock);
+			vm_page_xunbusy(m);
+			continue;
+		}
+                rw_runlock(lock);
+
+		vres = vm_cheri_revoke_check_page_clean(crc, m);
+		if ((vres & VM_CHERI_REVOKE_PAGE_HASCAPS) == 0) {
+			pte = pmap_pte(pmap, pv->pv_va, &lvl);
+			/*
+			 * Assume we can only get here with L3 mappings only.
+			 * This is the case because when we enqueue we don't
+			 * try to promote back.
+			 */
+			if (pte == NULL) {
+				vm_page_xunbusy(m);
+				continue;
+			}
+			KASSERT(lvl == 3, ("Unexpected PTE level"));
+			tpte = pmap_load(pte);
+
+			KASSERT(tpte & ATTR_CDBM,
+			    ("Unexpected batch clean %lx !CDBM", pv->pv_va));
+			/*
+			 * No need for AMO swap, we shouldn't be racing
+			 * with anything at this point.
+			 */
+			pmap_clear_bits(pte, ATTR_XREVOKE_MASK);
+			pmap_set_bits(pte, ATTR_XREVOKE_CLEAN);
+			pmap_s1_invalidate_page(pmap, pv->pv_va, true);
+			vm_page_aflag_clear(m, PGA_CAPDIRTY | PGA_CAPSTORE);
+			pmap_ktr_caprevoke_update("batch-clean DIRTY->CLEAN",
+			    pmap, pv->pv-va, m, pmap_load(pte));
+			counter_u64_add(cheri_became_cap_clean, 1);
+		} else {
+			counter_u64_add(cheri_batch_dirty, 1);
+		}
+
+		vm_page_xunbusy(m);
+	}
+
+	PMAP_UNLOCK(pmap);
+}
+
+enum pmap_caploadgen_res
+pmap_caploadgen_update(pmap_t pmap, vm_offset_t va, vm_page_t *mp, int flags)
+{
+	enum pmap_caploadgen_res res;
+	struct rwlock *lock;
+#if VM_NRESERVLEVEL > 0
+	pd_entry_t *l2, l2e;
+#endif
+	pt_entry_t *pte, tpte;
+	vm_page_t m;
+	int lvl;
+
+	PMAP_ASSERT_STAGE1(pmap);
+	PMAP_LOCK(pmap);
+
+	KASSERT(!(READ_SPECIALREG(cctlr_el1) & CCTLR_EL1_TGEN0_MASK) ==
+	    !(pmap->flags.uclg),
+	    ("pmap_caploadgen_update: pmap clg %d but CPU mismatch",
+	    (int)pmap->flags.uclg));
+
+retry:
+	pte = pmap_pte(pmap, va, &lvl);
+	if (pte == NULL) {
+		m = NULL;
+		res = PMAP_CAPLOADGEN_UNABLE;
+		goto out;
+	}
+	tpte = pmap_load(pte);
+
+	switch (tpte & ATTR_LC_MASK) {
+	case ATTR_LC_DISABLED:	/* tag clearing */
+	case ATTR_LC_ENABLED:	/* always allowed; not for us to worry about? */
+		m = NULL;
+		res = PMAP_CAPLOADGEN_UNABLE;
+		goto out;
+	case ATTR_LC_GEN0:	/* ah, here we go */
+	case ATTR_LC_GEN1:
+		break;
+	}
+
+	switch (lvl) {
+	default:
+		__assert_unreachable();
+	case 1:
+		/* XXX-MJ we can't really demote shm_largepage mappings */
+		m = NULL;
+		res = PMAP_CAPLOADGEN_UNABLE;
+		break;
+	case 2:
+		/*
+		 * Demote superpage and contiguous mappings.  When performing
+		 * load-side revocation, we don't want to pay the latency
+		 * penalty of scanning a large mapping.  Ideally, however, the
+		 * background scan could avoid breaking these mappings.  For
+		 * now, we attempt to reconstruct them below.
+		 */
+		lock = NULL;
+		pte = pmap_demote_l2_locked(pmap, pte, va, &lock);
+		if (lock != NULL)
+			rw_wunlock(lock);
+		if (pte == NULL) {
+			/* Demotion failed. */
+			m = NULL;
+			res = PMAP_CAPLOADGEN_UNABLE;
+			goto out;
+		}
+		goto retry;
+	case 3:
+		if ((tpte & ATTR_CONTIGUOUS) != 0) {
+			pmap_demote_l3c(pmap, pte, va);
+			goto retry;
+		}
+		break;
+	}
+
+	if (!(tpte & ATTR_LC_GEN_MASK) == !(pmap->flags.uclg)) {
+		/* Page already scanned, just fence (maybe redundantly) */
+		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+			pmap_s1_invalidate_page(pmap, va, true);
+		}
+
+		m = NULL;
+		res = PMAP_CAPLOADGEN_ALREADY;
+		goto out;
+	}
+
+	m = PHYS_TO_VM_PAGE(tpte & ~ATTR_MASK);
+	if (*mp == m) {
+		/*
+		 * We expected this page here (i.e., this is the page we just
+		 * scanned), so go ahead and update.  We know that the CLG bits
+		 * must still be wrong in light of the earlier test.
+		 */
+		res = PMAP_CAPLOADGEN_OK;
+
+		if (!(flags & PMAP_CAPLOADGEN_HASCAPS)) {
+			/*
+			 * We didn't see a capability on this page;
+                         * Push the page to the batch clean queue.
+                         * This will be demoted to cap-clean during the
+                         * next revocation pass.
+			 *
+			 * We can't do this with aliasing pages because we
+			 * only have one list entry per vm_page_t. I don't
+			 * really want to go down the route of allocating
+			 * entries as in the pv_list. Also, this is already
+			 * complicated as it is.
+			 * We permit racing with a read-only alias here
+			 * because we will re-check the page later anyway.
+			 */
+
+			if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
+				struct rwlock *lock;
+								
+				lock = VM_PAGE_TO_PV_LIST_LOCK(m);
+				rw_rlock(lock);
+				if (TAILQ_NEXT(TAILQ_FIRST(&m->md.pv_list),
+				    pv_next) == NULL) {
+					pmap_ktr_caprevoke_update(
+					    "caploadgen DIRTY->CLEAN (queued)",
+					    pmap, va, m, pmap_load(pte));
+
+					/*
+					 * XXX-AM remember to dequeue when
+					 * unmapping or creating alias mapping?
+					 */
+					TAILQ_INSERT_HEAD(
+					    &pmap->pm_revoker_clean_queue,
+					    m, md.revoker_clean_next);
+                                        counter_u64_add(cheri_batch_enqueue, 1);
+				} else {
+					counter_u64_add(cheri_batch_skip_alias, 1);
+				}
+				rw_runlock(lock);
+				/* Fallthrough to update the LCLG */
+			}
+		} else {
+			/*
+			 * Page has caps; may as well mark it dirty if we're
+			 * allowed to store here.
+			 *
+			 * We could clear PGA_CAPDIRTY here, too, but it
+			 * probably doesn't get set often ough to merit.
+			 */
+			if ((tpte & ATTR_CDBM) && !(tpte & ATTR_SC)) {
+				pmap_set_bits(pte, ATTR_SC);
+			}
+			pmap_ktr_caprevoke_update("caploadgen DIRTY", pmap, va,
+			    m, pmap_load(pte));
+		}
+
+		/*
+		 * On the fast path, where we're just updating the CLG bit, this
+		 * is the only store to the PTE we'll do.  On slower paths,
+		 * we'll do additional atomics to update other bits.  This is
+		 * probably a better state of affairs (1 + epsilon AMOs, no
+		 * retries) than we could otherwise easily get (either 1 LL/SC
+		 * CAS + epsilon retries or 1 AMOSWAP to a zero PTE + 1 store).
+		 */
+		pmap_update_pte_clg(pmap, pte);
+
+		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+			pmap_s1_invalidate_page(pmap, va, true);
+		}
+		pmap_ktr_caprevoke_update("caploadgen CLG", pmap, va, m,
+		    pmap_load(pte));
+		m = NULL;
+	} else if (!(vm_page_astate_load(m).flags & PGA_CAPSTORE)) {
+		KASSERT(!(tpte & ATTR_CDBM), ("!PGA_CAPSTORE but CDBM?"));
+		KASSERT(!(tpte & ATTR_SC), ("!PGA_CAPSTORE but SC?"));
+
+		/*
+		 * For tag-independent faults, we might still raise a
+		 * fault for !PGA_CAPSTORE pages if the TLB is holding
+		 * a stale LCLG.  Since the page really ought to be
+		 * capability clean at this point, we should be OK to
+		 * arbitarily manipulate the LCLG, so appease the TLB.
+		 */
+		pmap_update_pte_clg(pmap, pte);
+		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+			pmap_s1_invalidate_page(pmap, va, true);
+		}
+		pmap_ktr_caprevoke_update("caploadgen !CAPSTORE CLG", pmap, va,
+		    m, pmap_load(pte));
+
+		m = NULL;
+		res = PMAP_CAPLOADGEN_CLEAN;
+	} else if (vm_page_tryxbusy(m)) {
+		/*
+		 * OK, we have the page xbusy'd and so new writeable mappings
+		 * will not appear.
+		 */
+		if ((tpte & ATTR_DBM) != 0) {
+			res = PMAP_CAPLOADGEN_SCAN_RW_XBUSIED;
+		} else {
+			res = PMAP_CAPLOADGEN_SCAN_RO_XBUSIED;
+		}
+	} else if (vm_page_wire_mapped(m)) {
+		/*
+		 * OK, couldn't xbusy the page but could wire it down.  It's
+		 * safe to do a RO sweep now, and hopefully that's enough to
+		 * clear the page for return to service.
+		 */
+		res = PMAP_CAPLOADGEN_SCAN_RO_WIRED;
+	} else {
+		/* Could neither xbusy nor wire this page; fall back to VM */
+		m = NULL;
+		res = PMAP_CAPLOADGEN_TEARDOWN;
+	}
+
+out:
+#if VM_NRESERVLEVEL > 0
+	/*
+	 * If we...
+	 *   are on the background scan (as indicated by NONEWMAPS),
+	 *   are writing back a PTE (m != NULL),
+	 *   have superpages enabled,
+	 * try to restore an L3C mapping.  If that succeeded, then see if we can
+	 * put a superpage back together.
+	 */
+	if ((flags & PMAP_CAPLOADGEN_NONEWMAPS) &&
+	    m != NULL && pmap_ps_enabled(pmap) &&
+	    (va & L3C_OFFSET) == (PTE_TO_PHYS(tpte) & L3C_OFFSET) &&
+	    vm_reserv_is_populated(m, L3C_ENTRIES) &&
+	    pmap_promote_l3c(pmap, pte, va)) {
+		KASSERT(lvl == 3,
+		    ("pmap_caploadgen_update superpage: lvl != 3"));
+		KASSERT((m->flags & PG_FICTITIOUS) == 0,
+		    ("pmap_caploadgen_update superpage: m fictitious"));
+
+		/*
+		 * Find the page holding our L3 PTEs.  If all L3 entries exist
+		 * and the superpage would come from a fully populated
+		 * reservation, attempt promotion.
+		 */
+		l2 = pmap_l2(pmap, va);
+		l2e = pmap_load(l2);
+		vm_page_t mpte = PHYS_TO_VM_PAGE(l2e & ~ATTR_MASK);
+		if ((mpte->ref_count == Ln_ENTRIES) &&
+		    (vm_reserv_level_iffullpop(m) == 0)) {
+
+			struct rwlock *lock = NULL;
+			pmap_promote_l2(pmap, l2, va, mpte, &lock);
+			if (lock != NULL)
+				rw_wunlock(lock);
+		}
+	}
+#endif /* VM_NRESERVLEVEL > 0 */
+
+	PMAP_UNLOCK(pmap);
+	if (*mp != NULL) {
+		if (flags & PMAP_CAPLOADGEN_XBUSIED) {
+			vm_page_xunbusy(*mp);
+		} else {
+			vm_page_unwire_in_situ(*mp);
+		}
+	}
+	*mp = m;
+
+	return res;
+}
 
 #else /* default revoker state machine */
 

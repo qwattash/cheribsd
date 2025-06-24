@@ -147,6 +147,33 @@ SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, second_stage_alias, CTLFLAG
     "Count dirty to clean transistions involving aliasing an page mapping");
 #endif
 
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+COUNTER_U64_DEFINE_EARLY(cheri_batch_enqueue);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, batch_enqueue, CTLFLAG_RD,
+    &cheri_batch_enqueue,
+    "Count number of possibly cap-clean pages enqueued for batch cleaning");
+
+COUNTER_U64_DEFINE_EARLY(cheri_batch_skip_alias);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, batch_skip_alias, CTLFLAG_RD,
+    &cheri_batch_skip_alias,
+    "Count skipped dirty-clean transistions due to aliasing mappings");
+
+COUNTER_U64_DEFINE_EARLY(cheri_batch_late_skip_alias);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, batch_late_skip_alias, CTLFLAG_RD,
+    &cheri_batch_late_skip_alias,
+    "Count skipped dirty-clean transitions due to scan-time aliasing mapping");
+
+COUNTER_U64_DEFINE_EARLY(cheri_batch_skip_failxbusy);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, batch_skip_failxbusy, CTLFLAG_RD,
+    &cheri_batch_skip_failxbusy,
+    "Count skipped dirty-clean transitions because could not xbusy the page");
+
+COUNTER_U64_DEFINE_EARLY(cheri_batch_dirty);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, batch_dirty, CTLFLAG_RD,
+    &cheri_batch_dirty,
+    "Count failed dirty-clean transitions");
+#endif
+
 /***************************** KERNEL THREADS ***************************/
 
 static MALLOC_DEFINE(M_REVOKE, "cheri_revoke", "cheri_revoke temporary data");

@@ -68,6 +68,10 @@ struct rangeset;
 
 struct md_page {
 	TAILQ_HEAD(,pv_entry)	pv_list;
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+	/* Only non-aliasing pages can be on this list. */
+	TAILQ_ENTRY(vm_page)	revoker_clean_next;
+#endif
 	int			pv_gen;
 	vm_memattr_t		pv_memattr;
 };
@@ -102,6 +106,9 @@ struct pmap {
 		 */
 		unsigned uclg:1;
 	} flags;
+#ifdef CHERI_CAPREVOKE_BATCH_CLEAN
+	TAILQ_HEAD(, vm_page)	pm_revoker_clean_queue;
+#endif
 #endif
 };
 typedef struct pmap *pmap_t;
