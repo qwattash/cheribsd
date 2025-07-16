@@ -4194,6 +4194,8 @@ pmap_remove_l3_range(pmap_t pmap, pd_entry_t l2e, vm_offset_t sva,
 #ifdef CHERI_CAPREVOKE_BATCH_CLEAN
 			/* Drop from revoker clean list */
 			/*
+			 * XXX-AM: hack, abuse PGA_DIRTIABLE to indicate
+			 * presence of a clean queue?
 			 * XXX-AM: hack, check tag on tailq prev element to detect
 			 * enqueued pages. Tailq may trash the tqe_prev/next pointers
 			 * with (-1) when INVARIANTS are enabled.
@@ -6951,7 +6953,7 @@ pmap_cheri_revoke_batch_clean(const struct vm_cheri_revoke_cookie *crc,
 			counter_u64_add(cheri_batch_skip_failxbusy, 1);
 			continue;
 		}
-	       
+
 		lock = VM_PAGE_TO_PV_LIST_LOCK(m);
 		rw_rlock(lock);
 		pv = TAILQ_FIRST(&m->md.pv_list);
@@ -6961,7 +6963,7 @@ pmap_cheri_revoke_batch_clean(const struct vm_cheri_revoke_cookie *crc,
 			vm_page_xunbusy(m);
 			continue;
 		}
-                rw_runlock(lock);
+		rw_runlock(lock);
 
 		vres = vm_cheri_revoke_check_page_clean(crc, m);
 		if ((vres & VM_CHERI_REVOKE_PAGE_HASCAPS) == 0) {
@@ -6989,7 +6991,7 @@ pmap_cheri_revoke_batch_clean(const struct vm_cheri_revoke_cookie *crc,
 			pmap_s1_invalidate_page(pmap, pv->pv_va, true);
 			vm_page_aflag_clear(m, PGA_CAPDIRTY | PGA_CAPSTORE);
 			pmap_ktr_caprevoke_update("batch-clean DIRTY->CLEAN",
-			    pmap, pv->pv-va, m, pmap_load(pte));
+			    pmap, pv->pv_va, m, pmap_load(pte));
 			counter_u64_add(cheri_became_cap_clean, 1);
 		} else {
 			counter_u64_add(cheri_batch_dirty, 1);
@@ -7099,9 +7101,9 @@ retry:
 		if (!(flags & PMAP_CAPLOADGEN_HASCAPS)) {
 			/*
 			 * We didn't see a capability on this page;
-                         * Push the page to the batch clean queue.
-                         * This will be demoted to cap-clean during the
-                         * next revocation pass.
+			 * Push the page to the batch clean queue.
+			 * This will be demoted to cap-clean during the
+			 * next revocation pass.
 			 *
 			 * We can't do this with aliasing pages because we
 			 * only have one list entry per vm_page_t. I don't
@@ -7114,7 +7116,7 @@ retry:
 
 			if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
 				struct rwlock *lock;
-								
+
 				lock = VM_PAGE_TO_PV_LIST_LOCK(m);
 				rw_rlock(lock);
 				if (TAILQ_NEXT(TAILQ_FIRST(&m->md.pv_list),
@@ -7122,7 +7124,8 @@ retry:
 					pmap_ktr_caprevoke_update(
 					    "caploadgen DIRTY->CLEAN (queued)",
 					    pmap, va, m, pmap_load(pte));
-
+					// Mark page as enqueued
+					/* vm_page_astate_clear(m, PGA_CAPDIRTY); */
 					/*
 					 * XXX-AM remember to dequeue when
 					 * unmapping or creating alias mapping?
@@ -7130,7 +7133,7 @@ retry:
 					TAILQ_INSERT_HEAD(
 					    &pmap->pm_revoker_clean_queue,
 					    m, md.revoker_clean_next);
-                                        counter_u64_add(cheri_batch_enqueue, 1);
+					counter_u64_add(cheri_batch_enqueue, 1);
 				} else {
 					counter_u64_add(cheri_batch_skip_alias, 1);
 				}
