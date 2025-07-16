@@ -373,6 +373,9 @@ enum vm_fault_cheri_revoke_res {
 };
 
 extern counter_u64_t cheri_scan_rw, cheri_scan_ro;
+#ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
+extern counter_u64_t cheri_became_cap_dirty;
+#endif
 
 static int
 vm_fault_cheri_revoke(struct faultstate *fs, vm_page_t m, bool canwrite)
@@ -576,8 +579,14 @@ vm_fault_soft_fast(struct faultstate *fs)
 	 * Importantly, realprot is exempt from vm_page_mask_cap_prot()!
 	 */
 	if ((realprot & (VM_PROT_WRITE | VM_PROT_WRITE_CAP)) ==
-	    (VM_PROT_WRITE | VM_PROT_WRITE_CAP))
+	    (VM_PROT_WRITE | VM_PROT_WRITE_CAP)) {
+		CTR2(KTR_CAPREVOKE, "%p fault fast DIRTY %#lx",
+		    fs->map->pmap, VM_PAGE_TO_PHYS(m_map));
 		vm_page_aflag_set(m_map, PGA_CAPSTORE);
+#ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
+		counter_u64_add(cheri_became_cap_dirty, 1);
+#endif
+	}
 
 	if ((fs->fault_flags & VM_FAULT_NOPMAP) == 0 &&
 	    pmap_enter(fs->map->pmap, vaddr, m_map, realprot,
@@ -748,6 +757,7 @@ vm_fault_populate(struct faultstate *fs)
 		    (uintmax_t)VM_PAGE_TO_PHYS(m)));
 		if (fs->prot & VM_PROT_WRITE_CAP)
 			vm_page_aflag_set(m, PGA_CAPSTORE);
+			/* counter_u64_add(cheri_became_cap_dirty, 1); */
 		if (fs->fault_flags & VM_FAULT_NOPMAP) {
 			rv = KERN_SUCCESS;
 			goto skip_pmap_bdry;

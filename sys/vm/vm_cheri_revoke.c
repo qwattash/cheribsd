@@ -145,6 +145,11 @@ COUNTER_U64_DEFINE_EARLY(cheri_second_stage_alias);
 SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, second_stage_alias, CTLFLAG_RD,
     &cheri_second_stage_alias,
     "Count dirty to clean transistions involving aliasing an page mapping");
+
+COUNTER_U64_DEFINE_EARLY(cheri_became_cap_dirty);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, became_cap_dirty, CTLFLAG_RD,
+    &cheri_became_cap_dirty,
+    "Number of times a cap-clean page became cap-dirty, possibly page de-idle");
 #endif
 
 #ifdef CHERI_CAPREVOKE_BATCH_CLEAN
