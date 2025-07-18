@@ -764,7 +764,7 @@ post_revoke_pass:
 	/* Broadcast here: some sleepers may be able to take the fast out */
 	cv_broadcast(&vmm->vm_cheri_revoke_cv);
 
-	CTR4(KTR_CAPREVOKE, "%d/%d epoch %d fini %d",
+	CTR4(KTR_CAPREVOKE, "%d/%d next-epoch %d fini %d",
 	    td->td_proc->p_pid, td->td_tid, crepochs.dequeue, res);
 	return (cheri_revoke_fini(crsi, vm_mmap_to_errno(res), crstp,
 	    &crepochs));

@@ -1214,7 +1214,8 @@ vm_cheri_revoke_pass_locked(struct vmspace *vm,
 
 	vm_map_lock_downgrade(map);
 
-	CTR1(KTR_CAPREVOKE, "revoke-pass %p start", &vm->vm_map);
+	CTR2(KTR_CAPREVOKE, "revoke-pass map=%p pmap=%p start", &vm->vm_map,
+	    &vm->vm_pmap);
 
 	/*
 	 * Pinning the revoker helps improve determinism and so is useful for
@@ -1278,7 +1279,8 @@ out:
 		sched_unpin();
 
 	vm_map_lock(crc->map);
-	CTR2(KTR_CAPREVOKE, "revoke-pass %p done %d", &vm->vm_map, res);
+	CTR3(KTR_CAPREVOKE, "revoke-pass map=%p pmap=%p done %d", &vm->vm_map,
+	    &vm->vm_pmap, res);
 
 	return (res);
 }
