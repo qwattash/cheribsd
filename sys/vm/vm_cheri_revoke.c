@@ -150,6 +150,11 @@ COUNTER_U64_DEFINE_EARLY(cheri_became_cap_dirty);
 SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, became_cap_dirty, CTLFLAG_RD,
     &cheri_became_cap_dirty,
     "Number of times a cap-clean page became cap-dirty, possibly page de-idle");
+
+COUNTER_U64_DEFINE_EARLY(cheri_populate_cap_dirty);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, populate_cap_dirty, CTLFLAG_RD,
+    &cheri_populate_cap_dirty,
+    "Number of times a page is populated as cap-dirty");
 #endif
 
 #ifdef CHERI_CAPREVOKE_BATCH_CLEAN

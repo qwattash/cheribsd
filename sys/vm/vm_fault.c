@@ -375,6 +375,7 @@ enum vm_fault_cheri_revoke_res {
 extern counter_u64_t cheri_scan_rw, cheri_scan_ro;
 #ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
 extern counter_u64_t cheri_became_cap_dirty;
+extern counter_u64_t cheri_populate_cap_dirty;
 #endif
 
 static int
@@ -755,9 +756,13 @@ vm_fault_populate(struct faultstate *fs)
 		KASSERT((VM_PAGE_TO_PHYS(m) & (pagesizes[bdry_idx] - 1)) == 0,
 		    ("unaligned superpage m %p %#jx", m,
 		    (uintmax_t)VM_PAGE_TO_PHYS(m)));
-		if (fs->prot & VM_PROT_WRITE_CAP)
+		// XXX-AM: do we obey capstore_on_alloc here?
+		if (fs->prot & VM_PROT_WRITE_CAP) {
 			vm_page_aflag_set(m, PGA_CAPSTORE);
-			/* counter_u64_add(cheri_became_cap_dirty, 1); */
+#ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
+			counter_u64_add(cheri_populate_cap_dirty, 1);
+#endif
+		}
 		if (fs->fault_flags & VM_FAULT_NOPMAP) {
 			rv = KERN_SUCCESS;
 			goto skip_pmap_bdry;
@@ -1593,8 +1598,12 @@ vm_fault_allocate(struct faultstate *fs)
 	}
 	fs->oom_started = false;
 
-	if (capstore_on_alloc && (fs->prot & VM_PROT_WRITE_CAP))
+	if (capstore_on_alloc && (fs->prot & VM_PROT_WRITE_CAP)) {
 		vm_page_aflag_set(fs->m, PGA_CAPSTORE);
+#ifdef CHERI_CAPREVOKE_TWOSTAGE_CLEAN
+		counter_u64_add(cheri_populate_cap_dirty, 1);
+#endif
+	}
 
 	return (FAULT_CONTINUE);
 }
