@@ -6689,7 +6689,7 @@ retry:
 				 * Now a page can only have become CAPDIRTY via
 				 * vm_fault, which must have set both CAPDIRTY
 				 * and CDBM. Modifications to the pmap can not
-				 * happen untile we unlock the pmap
+				 * happen until we unlock the pmap
 				 * (XXX is this true?).
 				 */
 				KASSERT(flags & PMAP_CAPLOADGEN_NONEWMAPS,
