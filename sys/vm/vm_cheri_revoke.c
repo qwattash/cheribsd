@@ -853,6 +853,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 
 	if (!vm_cheri_revoke_should_visit_page(m)) {
 		CHERI_REVOKE_STATS_BUMP(crst, pages_skip);
+		counter_u64_add(cheri_skip_cap_clean, 1);
 		goto ok;
 	}
 
