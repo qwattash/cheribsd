@@ -925,9 +925,13 @@ vm_page_mask_cap_prot(vm_page_t m, vm_prot_t prot)
 {
 
 	if (vm_page_astate_load(m).flags & PGA_CAPSTORE) {
-		return prot;
+		return (prot);
 	} else {
-		return prot & ~VM_PROT_WRITE_CAP;
+#ifdef __riscv_zcheripurecap
+		return (prot & ~VM_PROT_CAP);
+#else
+		return (prot & ~VM_PROT_WRITE_CAP);
+#endif
 	}
 }
 
