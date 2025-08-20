@@ -259,9 +259,11 @@ TRAMP(tramp_push_frame)
 	 * Get the callee's compartment ID.
 	 */
 	sc		cs10, (-CLEN_BYTES * TRUSTED_FRAME_SIZE + TRUSTED_FRAME_SP_OSP + CLEN_BYTES)(TRUSTED_STACK_C)
+//3:	c.lui		s10, 1			/* To be patched at runtime */
+3:	lui		s10, 0			/* To be patched at runtime */
 .option push
 .option norvc
-3:	addi		s10, x0, 0		/* To be patched at runtime */
+4:	addi		s10, s10, 0		/* To be patched at runtime */
 .option pop
 	/*
 	 * Get the length of the stack lookup table.
@@ -295,7 +297,7 @@ TRAMP(tramp_push_frame)
 	sc		cs7, (-CLEN_BYTES * TRUSTED_FRAME_SIZE + CLEN_BYTES * 6)(TRUSTED_STACK_C)
 .option push
 .option norvc
-4:	lc		cs7, 0(ct0)		/* To be patched at runtime */
+5:	lc		cs7, 0(ct0)		/* To be patched at runtime */
 .option pop
 	/*
 	 * Get the type of the loaded value. The resolver is loaded iff the
@@ -315,10 +317,10 @@ TRAMP(tramp_push_frame)
 	 */
 	sc		cs4, (-CLEN_BYTES * TRUSTED_FRAME_SIZE + CLEN_BYTES * 3)(TRUSTED_STACK_C)
 	cmv		cs4, cs7
-	beqz		s6, 5f
+	beqz		s6, 6f
 	cmv		cs5, csp
 	cmv		cs4, ct5
-5:
+6:
 
 	/*
 	 * Load the landing address from the previous trusted frame.
@@ -353,8 +355,9 @@ TRAMPEND(tramp_push_frame)
 
 PATCH_POINT(tramp_push_frame, pcc, 1b)
 PATCH_POINT(tramp_push_frame, unsealer, 2b)
-PATCH_POINT(tramp_push_frame, cid, 3b)
-PATCH_POINT(tramp_push_frame, target, 4b)
+PATCH_POINT(tramp_push_frame, cidu, 3b)
+PATCH_POINT(tramp_push_frame, cid, 4b)
+PATCH_POINT(tramp_push_frame, target, 5b)
 
 TRAMP(tramp_count_entry)
 .option push

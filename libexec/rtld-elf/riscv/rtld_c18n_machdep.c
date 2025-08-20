@@ -85,12 +85,30 @@ tramp_compile(char **entry, const struct tramp_data *data)
 		size += size_tramp_##template;		\
 	} while(0)
 
-#define	PATCH_INS(offset)	((uint32_t *)(buf + (offset)))		\
+#define	PATCH_INS(offset)	((uint32_t *)(buf + (offset)))
+#define	PATCH_INS_C(offset)	((uint16_t *)(buf + (offset)))
 
 #define	PATCH_OFF(tramp, name)	({					\
 		extern const int32_t patch_tramp_##tramp##_##name;	\
 		size + patch_tramp_##tramp##_##name;			\
 	})
+
+#define	PATCH_U_TYPE(tramp, name, value)				\
+	do {								\
+		uint32_t _value = (value) + (1 << 11);			\
+		_value &= ~((1 << 12) - 1);				\
+		*PATCH_INS(PATCH_OFF(tramp, name)) |= _value;		\
+	} while (0)
+
+#define	PATCH_CI_TYPE(tramp, name, value)				\
+	do {								\
+		uint32_t _value = (value) + (1 << 11);			\
+		_value &= ~((1 << 12) - 1);				\
+		_value = ((_value & 0x20000) >> 5) |			\
+		    ((_value & 0x1f000) >> 10);				\
+		*PATCH_INS_C(PATCH_OFF(tramp, name)) &= ~4;		\
+		*PATCH_INS_C(PATCH_OFF(tramp, name)) |= _value;		\
+	} while (0)
 
 #define	PATCH_I_TYPE(tramp, name, value)				\
 	do {								\
@@ -138,6 +156,7 @@ tramp_compile(char **entry, const struct tramp_data *data)
 	COPY(push_frame);
 	pcc_off = PATCH_OFF(push_frame, pcc);
 	PATCH_I_TYPE(push_frame, unsealer, sealer_off - pcc_off);
+	PATCH_U_TYPE(push_frame, cidu, cid_to_index(callee).val);
 	PATCH_I_TYPE(push_frame, cid, cid_to_index(callee).val);
 	PATCH_I_TYPE(push_frame, target, target_off - pcc_off);
 
