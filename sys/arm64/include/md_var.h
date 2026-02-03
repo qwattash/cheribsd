@@ -35,6 +35,10 @@
 extern long Maxmem;
 extern char sigcode[];
 extern int szsigcode;
+#ifdef COMPAT_FREEBSD64
+extern char freebsd64_sigcode[];
+extern int freebsd64_szsigcode;
+#endif
 extern u_long elf_hwcap;
 extern u_long elf_hwcap2;
 extern u_long elf_hwcap3;
@@ -47,6 +51,7 @@ extern u_long linux_elf_hwcap4;
 extern u_long elf32_hwcap;
 extern u_long elf32_hwcap2;
 #endif
+extern struct regset regset_arm64_addr_mask;
 
 struct dumperinfo;
 struct minidumpstate;
