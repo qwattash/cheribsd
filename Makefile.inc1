@@ -1585,7 +1585,8 @@ test-includes: .PHONY
 # we may need to function.
 _sysent_PATH=	${TMPPATH}:/usr/libexec
 _sysent_dirs=	sys/kern
-_sysent_dirs+=	sys/compat/freebsd32
+_sysent_dirs+=	sys/compat/freebsd32 \
+		sys/compat/freebsd64
 _sysent_dirs+=	sys/amd64/linux		\
 		sys/amd64/linux32	\
 		sys/arm64/linux		\
