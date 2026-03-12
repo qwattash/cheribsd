@@ -2959,7 +2959,7 @@ static int
 aiocb32_store_aiocb(struct aiocb **ujobp, struct aiocb *ujob)
 {
 
-	return (suword32(ujobp, (long)ujob));
+	return (suword32(ujobp, (ptraddr_t)ujob));
 }
 
 static size_t
