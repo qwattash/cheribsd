@@ -1639,8 +1639,8 @@ getconfexit:
 		break;
 
 	case PCIOCBARMMAP:
-	case PCIOCBARMMAP64:
 #ifdef COMPAT_FREEBSD64
+	case PCIOCBARMMAP64:
 		if (cmd == PCIOCBARMMAP64) {
 			pbm64 = (struct pci_bar_mmap64 *)data;
 			pbm = &pbms;
