@@ -312,7 +312,7 @@ CFLAGS.clang+=	 -Qunused-arguments
 # XXX This should be defaulted to 2 when WITH_SSP is in use after further
 # testing and soak time.
 FORTIFY_SOURCE?=	0
-.if ${MK_SSP} != "no"
+.if ${MK_SSP} != "no" && !${MACHINE_ABI:Mpurecap}
 # Don't use -Wstack-protector as it breaks world with -Werror.
 .if ${COMPILER_FEATURES:Mstackclash}
 SSP_CFLAGS?=	-fstack-protector-strong -fstack-clash-protection
